@@ -21,6 +21,16 @@ def tiny_png():
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_display_start_and_device_use_the_same_primary_identity(self):
+        screen = ('Display: mDisplayId=0\n  mCurrentFocus=Window{a u0 org.player/.Game}\n'
+                  '  mFocusedApp=ActivityRecord{b u0 org.player/org.player.Game t10}\n'
+                  'Display: mDisplayId=4\n  mCurrentFocus=null\n'
+                  '  mFocusedApp=ActivityRecord{c u0 org.calculator/.Main t11}\n')
+        with patch.object(display, 'android', return_value=screen) as android:
+            self.assertEqual(display.foregrounds(), {0:'org.player/org.player.Game', 4:'org.calculator/org.calculator.Main'})
+            android.return_value = screen.replace('org.player/org.player.Game', 'org.player/.Select')
+            self.assertEqual(display.foregrounds()[0], '')
+
     def test_run_requires_an_explicit_app(self):
         errors = io.StringIO()
         args = ['phone-display', 'run', '--server-jar', '/example/server.jar']

@@ -1,15 +1,17 @@
 # phone-use
 
-[简体中文](README.md) · [Quick start](#quick-start) · [Try the calculator](#try-it-with-a-calculator) · [Download v0.1.1](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.1)
+[简体中文](README.md) · [Quick start](#quick-start) · [Try the calculator](#try-it-with-a-calculator) · [Download v0.1.2](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.2)
 
-Give an AI assistant its own Android display. You can keep a game stream on your tablet while the assistant opens a calculator on a virtual display on the **same device**. A desktop viewer can show you exactly what the assistant sees.
+Give an AI assistant its own Android display. In this real tablet capture, Android Clock keeps time on the main display while Xiaofeiyu’s AgY model opens Xiaomi Calculator on a virtual display using `phone_launch`. Both feeds use the same device clock.
 
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/phone-use-demo-still.png">
-  <img src="docs/images/phone-use-demo.gif" alt="Illustrated workflow: a racing game keeps running on the main display while the assistant switches the calculator from DEG to RAD on its virtual display, reads it back and restores DEG.">
+  <img src="docs/images/phone-use-demo.gif" alt="Native Android tablet capture: the stopwatch on the left keeps running as the calculator opens on the right. Later, the angle-mode key switches from deg to rad and back while the stopwatch advances.">
 </picture>
 
-*Eight-second illustrated walkthrough. Watch the unit button on the right: after tapping, the assistant reads the screen again to confirm `RAD`.* [Open the GIF](docs/images/phone-use-demo.gif) · [Static walkthrough](docs/images/observe-act.svg)
+*The 13-second GIF shows two excerpts from one take at their original speed, with about 57 seconds omitted between them. Watch the stopwatch while the other display opens Calculator, then watch its angle-mode key change.* [Watch the continuous 70-second recording (MP4)](docs/images/phone-use-continuous.mp4) · [View a synchronized still](docs/images/phone-use-demo-still.png)
+
+ADB supplied the main-display Start tap. The model requested the calculator launch; a test script used the same MCP tools for the later angle-mode taps and readbacks. Each feed shows a crop of the native app, with a waiting label until the first verified calculator frame.
 
 We tested phone-use on **rooted Android 13 with an ARM64 Debian chroot**. The assistant connects over Model Context Protocol (MCP) using standard input and output. It can read text with OCR, request a screenshot when it needs to see an icon, and tap a target from the latest observation.
 
@@ -32,10 +34,10 @@ adb push scrcpy-server-v4.1 /data/local/tmp/scrcpy-server-v4.1.jar
 apt-get update
 apt-get install -y python3-venv util-linux ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
 python3 -m venv /opt/xfy-phone-venv
-/opt/xfy-phone-venv/bin/python -m pip install 'phone-use[vision] @ https://github.com/ShuangjieGao/phone-use/releases/download/v0.1.1/phone_use-0.1.1-py3-none-any.whl'
+/opt/xfy-phone-venv/bin/python -m pip install 'phone-use[vision] @ https://github.com/ShuangjieGao/phone-use/releases/download/v0.1.2/phone_use-0.1.2-py3-none-any.whl'
 ```
 
-Upgrading from v0.1.0? Download the new wheel first. In your existing venv, run `python -m pip uninstall xfy-phone-use`, then `python -m pip install './phone_use-0.1.1-py3-none-any.whl[vision]'`. Both releases share a Python import path. The old CLI names remain available as aliases in v0.1.1.
+Upgrading from v0.1.0? Download the new wheel first. In your existing venv, run `python -m pip uninstall xfy-phone-use`, then `python -m pip install './phone_use-0.1.2-py3-none-any.whl[vision]'`. Both releases share a Python import path. The old CLI names remain available as aliases in v0.1.2.
 
 **3. Start the display.** Leave a different app in the foreground on the main display. This example opens Settings on the virtual display. Replace the package name with the Android app you want to use.
 
@@ -70,9 +72,16 @@ python3 examples/check.py --server /opt/xfy-phone-venv/bin/phone-use
 
 If you installed the wheel on its own, ask your MCP client to call `phone_status` and report the display ID and dimensions. Look for `ready: true` before trying an input.
 
-![A read-only check on the tablet connected to phone-use and found seven tools, then stopped because it could not verify the primary foreground.](docs/images/live-check.svg)
+The v0.1.2 check on the same tablet after the calculator close-up returned:
 
-In this run the MCP connection worked, but the check reported `primary foreground unverified`. If you see that message, bring an app to the foreground on the main display and run the check again. A ready display proceeds to frame verification.
+```text
+Server   phone-use 0.1.2
+Tools    7 available
+Display  ready, 900 x 1600 px
+Frame    received (OCR off, screenshot off)
+```
+
+If the check reports `primary foreground unverified`, bring an app to the foreground on the main display and run it again. Version 0.1.2 recognizes Android’s short and fully qualified names for the same Activity. Different foreground components still stop the check.
 
 ## Try it with a calculator
 
@@ -82,7 +91,9 @@ For a first run, use a calculator with a **DEG/RAD** toggle. On the tested Xiaom
 
 On the test tablet the sequence was **DEG → RAD → DEG**. Each tap used an `observation_id` from a fresh view. If the control is an unlabeled icon, the assistant can request a screenshot with `screenshot: true, elements: false` and tap by pixel coordinates.
 
-![Illustrated calculator example showing observation, a tap on the angle unit, and a second observation to confirm the new state.](docs/images/observe-act.svg)
+[Watch the native calculator keypad (about nine seconds).](docs/images/calculator-live.gif) In this separate take, MCP read back `rad` at 3.6 seconds and the restored `deg` at 7.3 seconds. The angle-mode button is at the top left.
+
+**Does the physical display still accept input?** In a second dual-display take, the AgY model opened Calculator on the virtual display. An ADB tap on the main display marked a lap in Android Clock. After the recording, the paused stopwatch showed **12.73 s** for lap one and **14.18 s** total. The next angle-button input in this take was declined while the virtual display was changing. [Synchronized clip](docs/images/dual-lap.gif) · [Native lap result captured after the clip](docs/images/lap-receipt.png)
 
 ## Tools
 
@@ -114,4 +125,4 @@ You can close the viewer while the assistant keeps using its display. To release
 
 To run the source tests, use `python -m unittest discover -s tests -v` from the repository root.
 
-Trying a different device? [Share a compatibility report](https://github.com/ShuangjieGao/phone-use/issues) with the device model, Android version and app you tested. If phone-use helped you, you can star the repo or share the [3D project card](docs/images/phone-use-card.png).
+Trying a different device? [Share a compatibility report](https://github.com/ShuangjieGao/phone-use/issues) with the device model, Android version and app you tested. If phone-use helped you, you can star the repo or share the [native dual-display capture](docs/images/phone-use-card.png).

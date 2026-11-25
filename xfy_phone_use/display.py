@@ -47,15 +47,38 @@ def new_display(before, now, width, height):
     return None
 
 
-def foregrounds():
+def window_activities(dump):
+    """Read Android's focus records per display; an unrecognized window is distinct from null."""
+    def component(block, field):
+        line = re.search(r'^[ \t]*' + field + r'=([^\n]*)', block, re.M)
+        if not line or line[1].strip() == 'null':
+            return ''
+        match = re.search(r'\bu\d+ ([\w]+(?:\.[\w]+)*)/(\.?[\w$]+(?:\.[\w$]+)*)(?=[\s}])', line[1])
+        if not match:
+            return None
+        package, activity = match.groups()
+        # Android can print the same ComponentName as both pkg/.Main and pkg/pkg.Main.
+        if activity.startswith('.'):
+            activity = package + activity
+        return f'{package}/{activity}'
+
     result = {}
-    for block in re.split(r'(?=^[ \t]*Display: mDisplayId=)', android('dumpsys', 'window', 'displays'), flags=re.M):
+    for block in re.split(r'(?=^[ \t]*Display: mDisplayId=)', dump, flags=re.M):
         did = re.match(r'^[ \t]*Display: mDisplayId=(\d+)', block)
         if did:
-            focused = re.search(r'mCurrentFocus=Window\{[^\n}]*?\bu\d+ ([\w.$/]+)', block)
-            app = re.search(r'mFocusedApp=ActivityRecord\{[^\n}]*?\bu\d+ ([\w.$/]+)', block)
-            result[int(did[1])] = focused[1] if focused else (app[1] if app else '')
+            result[int(did[1])] = (component(block, 'mCurrentFocus'), component(block, 'mFocusedApp'))
     return result
+
+
+def foreground_activity(focus, app, *, primary):
+    if focus is None or app is None or (primary and focus and app and focus != app):
+        return ''
+    return focus or app
+
+
+def foregrounds():
+    windows = window_activities(android('dumpsys', 'window', 'displays'))
+    return {did: foreground_activity(*records, primary=did == 0) for did, records in windows.items()}
 
 
 def server_options(scid, options):

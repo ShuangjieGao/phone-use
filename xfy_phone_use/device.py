@@ -13,6 +13,8 @@ import subprocess
 import time
 from dataclasses import dataclass
 
+from .display import foreground_activity, window_activities as _windows
+
 
 class PhoneError(RuntimeError):
     """An operation failed or could not be verified on the secondary display."""
@@ -40,18 +42,6 @@ def _android(*args):
     except (OSError, subprocess.SubprocessError) as exc:
         raise PhoneError(f'Android {program} failed; check the tablet bridge') from exc
     return result.stdout.decode('utf-8', errors='replace')
-
-
-def _windows(dump):
-    result = {}
-    for block in re.split(r'(?=^[ \t]*Display: mDisplayId=)', dump, flags=re.M):
-        display = re.search(r'^[ \t]*Display: mDisplayId=(\d+)', block, re.M)
-        if display:
-            def activity(field):
-                match = re.search(field + r'=[^\n}]*?\bu\d+ ([\w.$/]+)', block)
-                return match.group(1) if match else ''
-            result[int(display.group(1))] = (activity('mCurrentFocus'), activity('mFocusedApp'))
-    return result
 
 
 def _frame(path, screen):
@@ -152,17 +142,16 @@ class PhoneDevice:
         if not entry or 'scrcpy' not in entry[1].lower():
             raise PhoneError('Selected display is no longer a scrcpy display')
         windows = _windows(_android('dumpsys', 'window', 'displays'))
-        focus, app = windows.get(0, ('', ''))
-        primary = focus or app
-        if not primary or (app and focus and app != focus):
+        primary = foreground_activity(*windows.get(0, ('', '')), primary=True)
+        if not primary:
             raise PhoneError('Primary foreground could not be verified')
         if self.primary and primary != self.primary:
             raise PhoneError('Primary foreground changed; stopped secondary control')
         self.primary = primary
         if display not in windows:
             raise PhoneError('Secondary window disappeared')
-        focus, app = windows[display]
-        return Screen(display, width, height, inode, primary, focus or app)
+        activity = foreground_activity(*windows[display], primary=False)
+        return Screen(display, width, height, inode, primary, activity)
 
     def status(self):
         try:

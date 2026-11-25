@@ -128,7 +128,38 @@ class TransportTests(unittest.TestCase):
     def test_windows_keep_displays_separate(self):
         dump = ('Display: mDisplayId=0\n  mCurrentFocus=Window{aaa u0 moon/Game}\n'
                 '  Display: mDisplayId=8\n  mFocusedApp=ActivityRecord{bbb u0 com.qq/.Main t22}\n')
-        self.assertEqual(device._windows(dump), {0: ('moon/Game',''), 8: ('','com.qq/.Main')})
+        self.assertEqual(device._windows(dump), {0: ('moon/Game',''), 8: ('','com.qq/com.qq.Main')})
+
+    def test_status_compares_full_android_components_and_pins_the_primary(self):
+        package = 'org.example.player'
+        primary = package + '/.ui.Player$Activity'
+        expanded = package + '/' + package + '.ui.Player$Activity'
+        other = package + '/.Other'
+        def dump(focused, app):
+            return (f'Display: mDisplayId=0\n  mCurrentFocus={focused}\n  mFocusedApp={app}\n'
+                    'Display: mDisplayId=8\n  mCurrentFocus=Window{abc u0 org.calculator/.Main}\n')
+
+        with tempfile.TemporaryDirectory() as root, patch.object(Path, 'is_socket', return_value=True), \
+                patch.object(device, '_android') as android:
+            phone = device.PhoneDevice()
+            phone.runtime = Path(root)
+            (phone.runtime / 'display.json').write_text('{"id":8,"width":160,"height":120}')
+            (phone.runtime / 'screen.sock').touch()
+            def status(focus, app):
+                android.side_effect = ['Display id 8: scrcpy, real 160 x 120', dump(focus, app)]
+                return phone.status()
+
+            first = status(f'Window{{a u0 {expanded}}}', f'ActivityRecord{{b u0 {primary} t23}}')
+            self.assertTrue(first['ready'], first)
+            self.assertEqual(first['activity'], 'org.calculator/org.calculator.Main')
+            self.assertEqual(phone.primary, expanded)
+            self.assertTrue(status(f'Window{{a u0 {primary}}}', f'ActivityRecord{{b u0 {expanded} t23}}')['ready'])
+            for win, app in [(primary, other), (primary, 'some.other/'+package+'.ui.Player$Activity'),
+                             ('NotificationShade', primary), (primary, 'broken/name/impossible')]:
+                with self.subTest(win=win,app=app):
+                    self.assertFalse(status(f'Window{{a u0 {win}}}', f'ActivityRecord{{b u0 {app} t23}}')['ready'])
+            self.assertFalse(status('null', 'null')['ready'])
+            self.assertFalse(status(f'Window{{a u0 {other}}}', f'ActivityRecord{{b u0 {other} t23}}')['ready'])
 
     def test_ocr_grouped_by_line(self):
         table = ('level\tblock_num\tpar_num\tline_num\tleft\ttop\twidth\theight\ttext\n'

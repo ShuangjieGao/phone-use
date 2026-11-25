@@ -2,16 +2,18 @@
 
 [English](README.en.md) · [安装](#安装) · [计算器演示](#计算器演示) · [下载发行版](https://github.com/ShuangjieGao/phone-use/releases/latest)
 
-**给 AI 一块独立的安卓副屏，你继续使用主屏。** 我们在同一台平板上用 Moonlight 串流，同时让助手在虚拟屏上打开另一个应用。想看看助手点了什么？在电脑上打开这块副屏的只读预览即可。
+**你用主屏，小肥鱼在同一台安卓设备上用另一个应用。** 下面是一次平板实录：左边的安卓时钟在计时，右边的小米计算器由小肥鱼的 AgY 模型通过 `phone_launch` 打开。两路画面按同一台设备的时钟采集。
 
 项目最初为小肥鱼开发，也能接入其他支持 MCP stdio 的助手。**实测环境**为已 root 的 Android 13 平板和 ARM64 Debian chroot。
 
 <picture>
   <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/phone-use-demo-still.png">
-  <img src="docs/images/phone-use-demo.gif" alt="双屏工作流程示意：主屏的赛车串流继续，助手在同一设备的虚拟副屏把计算器从 DEG 切到 RAD，读回新单位，再恢复 DEG。">
+  <img src="docs/images/phone-use-demo.gif" alt="同一台安卓平板实录：左边秒表持续走时，右边真实打开小米计算器。稍后左边还在计时，右边的角度键从 deg 变为 rad，再恢复。">
 </picture>
 
-*8 秒流程示意。看右侧单位键，助手点按后会再观察一次，确认画面上出现了 `RAD`。* [单独查看 GIF](docs/images/phone-use-demo.gif) · [静态操作步骤](docs/images/observe-act.svg)
+*13 秒 GIF 取自同一轮录像。第一段看副屏打开计算器，第二段看主屏仍在走时、右侧单位键由 `deg` 切到 `rad` 再恢复。两段各按原速播放，中间略去约 57 秒。* [看完整连续 70 秒实录（MP4）](docs/images/phone-use-continuous.mp4) · [查看同步静态帧](docs/images/phone-use-demo-still.png)
+
+主屏的「开始」由 ADB 代替手指点按；副屏的「打开计算器」由真实模型发起，后续点按与读回由测试脚本通过同一套 MCP 工具完成。片中展示原生应用区域，计算器界面尚未取到时右侧会标明正在等待。
 
 | 使用时你关心什么 | phone-use 怎样处理 |
 | --- | --- |
@@ -23,9 +25,9 @@
 
 配置好 MCP 后，可让助手试一句：**「在副屏打开计算器，读出当前角度单位，切换一次，告诉我实际显示什么，然后恢复原来那一档。」** 选择有 `DEG` / `RAD` 切换键的科学计算器。不同设备上的应用包名和按钮位置可能不同。
 
-![操作流程示意：助手观察到 DEG，依据刚才的观察点击单位按钮，然后在新画面读到 RAD。](docs/images/observe-act.svg)
+[看真机计算器按键近景（约 9 秒）](docs/images/calculator-live.gif)。在这段单独拍摄的近景中，`phone_observe` 先读到左上角的 `deg`，`phone_tap` 点按后在第 3.6 秒读回 `rad`，再点一次，第 7.3 秒读回 `deg`。**新画面里出现的单位**才是这个任务的验收结果。
 
-实机测试中，助手先读到 `deg`，点按后从新帧读到 `rad`，再点一次读回 `deg`。点击回执说明输入已发出；**新画面里出现的单位**才是这个任务的验收结果。
+**主屏还能响应操作吗？** 在另一次同台录制中，主屏运行安卓时钟的秒表，小肥鱼的 AgY 模型用 `phone_launch` 在副屏打开计算器。主屏收到 ADB 发出的「计次」，暂停后可读到第 1 圈 **12.73 秒**，总计 **14.18 秒**。下面的静态回执取自该场录制结束后；那一轮副屏刚切换界面，MCP 拦下了紧随其后的单位键输入。[同步录制片段](docs/images/dual-lap.gif) · [秒表原生计次回执](docs/images/lap-receipt.png)
 
 ## 运行环境
 
@@ -44,13 +46,13 @@ if ((Get-FileHash .\scrcpy-server-v4.1 -Algorithm SHA256).Hash -ne $expected) { 
 adb push scrcpy-server-v4.1 /data/local/tmp/scrcpy-server-v4.1.jar
 ```
 
-**2. 在平板的 Debian chroot 内安装。** 以下命令以 root 执行。Release 的 wheel 可直接安装，Python 虚拟环境会放在 `/opt/xfy-phone-venv`。[下载发行包](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.1)
+**2. 在平板的 Debian chroot 内安装。** 以下命令以 root 执行。Release 的 wheel 可直接安装，Python 虚拟环境会放在 `/opt/xfy-phone-venv`。[下载发行包](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.2)
 
 ```sh
 apt-get update
 apt-get install -y python3-venv util-linux ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
 python3 -m venv /opt/xfy-phone-venv
-/opt/xfy-phone-venv/bin/python -m pip install 'phone-use[vision] @ https://github.com/ShuangjieGao/phone-use/releases/download/v0.1.1/phone_use-0.1.1-py3-none-any.whl'
+/opt/xfy-phone-venv/bin/python -m pip install 'phone-use[vision] @ https://github.com/ShuangjieGao/phone-use/releases/download/v0.1.2/phone_use-0.1.2-py3-none-any.whl'
 ```
 
 从源码安装时，在仓库目录运行 `/opt/xfy-phone-venv/bin/python -m pip install '.[vision]'`。
@@ -75,9 +77,16 @@ python3 examples/check.py --server /opt/xfy-phone-venv/bin/phone-use
 
 脚本作为客户端启动 MCP 服务，依次核对握手、7 个工具和副屏状态；副屏就绪后再取一帧验证。它只打印检查结果，不读取 OCR 文字或返回截图。
 
-![v0.1.1 平板连接检查实录：协议握手和七项工具检查通过，主屏前台未能核实，检查停在副屏状态。](docs/images/live-check.svg)
+录制计算器近景后，同一台平板上的 v0.1.2 返回了以下结果。
 
-这张图演示了一个实际遇到的情况：**MCP 连通了，副屏还不能操作**。脚本显示 `primary foreground unverified` 时，让主屏停在一个前台清晰的应用，再运行同一条命令。这样可以先定位问题，再让模型尝试操作。
+```text
+Server   phone-use 0.1.2
+Tools    7 available
+Display  ready, 900 x 1600 px
+Frame    received (OCR off, screenshot off)
+```
+
+如果检查停在 `primary foreground unverified`，让主屏停在一个前台清晰的应用，再运行同一条命令。v0.1.2 能识别安卓给同一个 Activity 输出的全名和简写；遇到不同的主屏窗口时仍会停下来复核。
 
 ## 连接 MCP 客户端
 
@@ -120,11 +129,11 @@ scrcpy --display-id=7 --no-control --no-audio --no-power-on
 
 ### 从 v0.1.0 升级
 
-已用旧版 `xfy-phone-use` 的用户，请先下载本项目 v0.1.1 的 wheel，再在原来的虚拟环境中执行以下命令。两个发行包使用相同的 Python 模块，先卸载旧包再装新包可以避免文件互相覆盖。旧命令 `xfy-phone-use` 和 `xfy-phone-display` 仍可使用。
+已用旧版 `xfy-phone-use` 的用户，请先下载本项目 v0.1.2 的 wheel，再在原来的虚拟环境中执行以下命令。两个发行包使用相同的 Python 模块，先卸载旧包再装新包可以避免文件互相覆盖。旧命令 `xfy-phone-use` 和 `xfy-phone-display` 仍可使用。
 
 ```sh
 /opt/xfy-phone-venv/bin/python -m pip uninstall -y xfy-phone-use
-/opt/xfy-phone-venv/bin/python -m pip install './phone_use-0.1.1-py3-none-any.whl[vision]'
+/opt/xfy-phone-venv/bin/python -m pip install './phone_use-0.1.2-py3-none-any.whl[vision]'
 ```
 
 ## 开发与许可
@@ -135,4 +144,4 @@ python -m unittest discover -s tests -v
 
 本项目按 [GNU AGPL-3.0-only](LICENSE) 开源。scrcpy、FFmpeg、Tesseract 和 Pillow 独立安装，适用各自的上游许可证。
 
-如果你也在手机或平板上跑通了，欢迎在 [Issues](https://github.com/ShuangjieGao/phone-use/issues) 分享设备型号、Android 版本和哪个应用能在副屏上运行。这些记录可以帮助下一个人判断自己的设备是否合适。觉得这个工具有用，可以点 **Star** 收藏，或用[3D 项目介绍图](docs/images/phone-use-card.png)分享给朋友。
+如果你也在手机或平板上跑通了，欢迎在 [Issues](https://github.com/ShuangjieGao/phone-use/issues) 分享设备型号、Android 版本和哪个应用能在副屏上运行。这些记录可以帮助下一个人判断自己的设备是否合适。觉得这个工具有用，可以点 **Star** 收藏，或用[双屏实录对照图](docs/images/phone-use-card.png)分享给朋友。
