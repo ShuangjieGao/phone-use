@@ -52,6 +52,23 @@ class ProtocolTests(unittest.TestCase):
         self.device.observe.assert_called_once_with(elements=False)
         self.assertEqual(json.loads(response["content"][0]["text"])["source"], "frame")
 
+    def test_sensitive_bound_editor_is_not_returned_and_unicode_is_forwarded(self):
+        self.device.observe.return_value = {"observation_id": "a", "editor": {"status": "ready"}}
+        self.call("phone_observe", elements=False, editor=True)
+        self.device.observe.assert_called_once_with(elements=False, editor=True)
+        self.device.act.return_value = {"action": "text", "submitted": True, "effect": "verified", "readback": True}
+        result = self.call("phone_type", observation_id="a", text="买种子")
+        self.device.act.assert_called_once_with("text", observation_id="a", text="买种子")
+        self.assertEqual(json.loads(result["content"][0]["text"])["effect"], "verified")
+
+    def test_ambiguous_input_is_a_failed_mcp_result_and_never_reports_success(self):
+        error = DeviceError("Verify the editor before retry.")
+        error.receipt = {"effect": "unconfirmed", "action": "text", "retry_safe": False}
+        self.device.act.side_effect = error
+        result = self.call("phone_type", observation_id="a", text="中文")
+        self.assertTrue(result["isError"])
+        self.assertEqual(json.loads(result["content"][0]["text"]), error.receipt)
+
     def test_all_actions_route_to_observed_display(self):
         self.device.act.return_value = {"sent": True}
         examples = [

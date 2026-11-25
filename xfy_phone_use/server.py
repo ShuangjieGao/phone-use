@@ -27,8 +27,9 @@ def tool(name, description, properties, required=()):
 
 TOOLS = {item["name"]: item for item in (
     tool("phone_status", "Check the configured Android secondary display.", {}),
-    tool("phone_observe", "Read the secondary display and obtain an observation ID. Disable elements to skip OCR when using screenshots.",
+    tool("phone_observe", "Observe the secondary display. Set editor=true before typing to bind the focused native editor; disable elements to skip OCR.",
          {"screenshot": {"type": "boolean", "default": False},
+          "editor": {"type": "boolean", "default": False},
           "elements": {"type": "boolean", "default": True}}),
     tool("phone_launch", "Open an Android app on the configured secondary display, then observe it.",
          {"package": {"type": "string", "minLength": 1}}, ["package"]),
@@ -38,7 +39,7 @@ TOOLS = {item["name"]: item for item in (
     tool("phone_swipe", "Swipe between two points in the observed display's pixel coordinates.",
          {"observation_id": OBSERVATION, "x": PIXEL, "y": PIXEL, "to_x": PIXEL, "to_y": PIXEL},
          ["observation_id", "x", "y", "to_x", "to_y"]),
-    tool("phone_type", "Enter printable ASCII text into the focused field on the observed display.",
+    tool("phone_type", "Type into the focused secondary-display editor. The native helper verifies Unicode input; the legacy ASCII backend reports unverified dispatch. Inspect an unconfirmed result before retrying.",
          {"observation_id": OBSERVATION, "text": {"type": "string", "minLength": 1}},
          ["observation_id", "text"]),
     tool("phone_key", "Press a navigation or editing key on the observed display.",
@@ -120,6 +121,8 @@ class Server:
                 result = self.device.act(action, **arguments)
             return tool_content(result)
         except (self.device_error, ValueError) as exc:
+            if hasattr(exc, 'receipt'):
+                return {'isError': True, **tool_content(exc.receipt)}
             return {"isError": True, "content": [{"type": "text", "text": str(exc)}]}
 
     def dispatch(self, method, params):

@@ -1,20 +1,21 @@
 # phone-use
 
-[English](README.en.md) · [源码安装](#安装) · [连接助手](#连接-mcp-客户端)
+[English](README.en.md) · [源码安装](#安装) · [连接助手](#连接-mcp-客户端) · [输入中文](#输入中文)
 
 **在安卓主屏玩《星露谷物语》，让助手在副屏处理另一件事。** `phone-use` 提供 7 个 MCP 工具，供助手观察并操作独立的安卓虚拟显示器。支持 stdio，已在 root 的 Android 13 平板和 ARM64 Debian chroot 上使用。
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/stardew-wechat-poster.png">
-  <img src="docs/images/stardew-wechat.gif" alt="同一台安卓平板的两块完整屏幕：左边的角色在星露谷农场走动，右边的小肥鱼在微信点击确定，界面随后显示已收藏。">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/wechat-filehelper-zh-poster.png">
+  <img src="docs/images/wechat-filehelper-zh.gif" alt="同一台平板的完整双屏实录：左边的星露谷角色在农场走动，右边的微信文件传输助手收到一条「买种子需要四百八十金」。公开画面遮挡了发送者头像。">
 </picture>
 
 | 主屏继续玩游戏时 | 副屏在做什么 | 全幅原速演示 |
 | --- | --- | --- |
+| 在农场里走动 | 小肥鱼在微信文件传输助手里输入「买种子需要四百八十金」，从编辑框读回文字后点一次「发送」。公开画面仅遮住发送者头像。 | [中文发信 · 43 秒](docs/images/wechat-filehelper-zh.mp4) · [原尺寸截图](docs/images/wechat-filehelper-zh-poster.png) |
 | 在农舍前走向田地 | 助手在微信里点「确定」，将一份模拟种子采购清单保存到收藏。清单通过安卓分享传入，全程不涉及好友聊天。 | [微信实录 · 24 秒](docs/images/stardew-wechat.mp4) · [原尺寸截图](docs/images/stardew-wechat-poster.png) |
 | 在农场里移动 | 助手打开计算器，随后演示脚本通过 MCP 输入 `24 × 20`，读回种子预算 **480 金**。 | [计算器实录 · 23 秒](docs/images/stardew-fullscreen.mp4) · [原尺寸截图](docs/images/stardew-fullscreen-poster.png) |
 
-两段都来自安卓版游戏和同一台设备的副屏，保留完整画面和连续时间线。
+每段都是同一台设备的主屏与副屏同步采集，保留两块屏的完整画面和连续时间线。
 
 | 使用时你关心什么 | phone-use 怎样处理 |
 | --- | --- |
@@ -91,6 +92,20 @@ python3 examples/check.py --server /opt/xfy-phone-venv/bin/phone-use
 
 第一次可以问助手「查看副屏状态，告诉我屏幕尺寸」。`phone_status` 返回 `ready: true` 后就可以试[计算器演示](#计算器演示)。
 
+### 输入中文
+
+在 Android 11 或更高版本上，可以安装本项目的[原生编辑辅助程序](android-text-input/README.md)。在有 JDK、Android SDK Platform 35 和 Build Tools 的 Linux 构建机上，从仓库根目录运行以下命令。Windows 用户也可以在 WSL 构建，再用已连接平板的 ADB 安装生成的 APK。
+
+```sh
+# ANDROID_HOME 指向已安装的 Android SDK
+sh android-text-input/build-apk.sh
+adb install -r android-text-input/phone-use-text-input.apk
+```
+
+在上方 MCP 配置的 `env` 中添加 `"PHONE_USE_TEXT_HELPER": "1"`，重启 MCP 客户端连接。Android 13 及以上的部分应用（包括实测的微信）不会在副屏提供可编辑的无障碍节点。这种情况下，可在安卓的「无障碍 → 已安装或已下载的服务」中手动开启 **phone-use local text input**。这是系统级授权；辅助程序使用当前编辑器的输入连接，不需要更换默认键盘或使用剪贴板。可随时从同一处关闭。
+
+先点中副屏输入框，调用 `phone_observe(editor=true, elements=false)`，再把这次的 `observation_id` 交给 `phone_type`。工具返回 `readback: true` 表示已从同一个编辑框读回预期的文字。收到 `unconfirmed` 时先检查现有文字，再决定是否重试。聊天里的「发送」是单独的一次点按。
+
 ### 工具一览
 
 | MCP 工具 | 用途 |
@@ -100,7 +115,7 @@ python3 examples/check.py --server /opt/xfy-phone-venv/bin/phone-use
 | `phone_observe` | 通过 OCR 返回文字区域和 `observation_id`，可选 `screenshot: true` 取图或 `elements: false` 跳过 OCR |
 | `phone_tap` | 按文字区域 ID 或像素坐标点按 |
 | `phone_swipe` | 在观察到的画面上滑动 |
-| `phone_type` | 向输入焦点输入可打印 ASCII 文本。中文可由 OCR 读取，直接中文输入尚未实现 |
+| `phone_type` | 向聚焦的输入框写入单行文本。原生编辑辅助支持中文及读回确认；基础键盘模式支持可打印 ASCII |
 | `phone_key` | 发送 `back`、`enter` 或 `del` |
 
 ## 从电脑看同一块屏

@@ -1,0 +1,7 @@
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/editor_description"
+    android:packageNames="io.github.phoneuse.textinput"
+    android:accessibilityEventTypes="typeViewFocused"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagInputMethodEditor"
+    android:canRetrieveWindowContent="false" />

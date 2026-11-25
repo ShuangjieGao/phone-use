@@ -11,6 +11,7 @@ class PhoneDeviceTests(unittest.TestCase):
     def setUp(self):
         self.phone = device.PhoneDevice()
         self.phone.runtime = Path('runtime')
+        self.phone.native_text = False
         self.screen = device.Screen(8, 160, 120, 44, 'moon/Game', 'com.qq/.Main')
         self.png = b'frame A'
         self.call = self.start_patch('_android', return_value='')
@@ -49,6 +50,81 @@ class PhoneDeviceTests(unittest.TestCase):
         self.assertEqual(view['elements'], [])
         self.assertEqual(view['image_png'], self.png)
 
+    def test_verified_unicode_uses_bound_editor_without_exposing_native_token(self):
+        self.phone.native_text = True
+        binding = {'status': 'ready', 'bounds': [8, 61, 120, 82], 'token': 'opaque'}
+        request = self.start_patch('request_editor', side_effect=[binding, {'status': 'verified'}])
+        view = self.phone.observe(elements=False, editor=True)
+        self.assertEqual(view['editor'], {'status': 'ready', 'bounds': binding['bounds']})
+        outcome = self.phone.act('text', view['observation_id'], text='买种子 %s 🌱')
+        self.assertEqual(outcome['effect'], 'verified')
+        self.assertTrue(outcome['readback'])
+        self.assertNotIn('买种子', str(outcome))
+        request.assert_called_with(self.screen, 'insert', token='opaque', text='买种子 %s 🌱', transport='instrumentation')
+        self.call.assert_not_called()
+        with self.assertRaisesRegex(device.PhoneError, 'expired'):
+            self.phone.act('text', view['observation_id'], text='买种子 %s 🌱')
+        self.assertEqual(request.call_count, 2)
+
+    def test_native_input_rechecks_editor_for_existing_observe_callers(self):
+        self.phone.native_text = True
+        request = self.start_patch('request_editor', side_effect=[
+            {'status': 'ready', 'bounds': [8, 61, 120, 82], 'token': 'opaque'},
+            {'status': 'verified'}])
+        view = self.phone.observe(elements=False)
+        request.assert_not_called()
+        self.phone.act('text', view['observation_id'], text='hello')
+        self.assertEqual([c.args[1] for c in request.call_args_list], ['inspect', 'insert'])
+        self.call.assert_not_called()
+
+    def test_changed_frame_requires_editor_binding_and_a_caret_sized_difference(self):
+        self.phone.native_text = True
+        request = self.start_patch('request_editor', return_value={
+            'status': 'ready', 'bounds': [8, 61, 120, 82], 'token': 'opaque'})
+        self.capture.return_value = (1, 1000, b'old frame')
+        view = self.phone.observe()
+        self.capture.return_value = (2, 1001, b'new frame')
+        with self.assertRaisesRegex(device.PhoneError, 'Screen changed'):
+            self.phone.act('text', view['observation_id'], text='hello')
+        request.assert_not_called()
+        for same in (False, True):
+            with self.subTest(same=same), patch.object(device, '_same_except_caret', return_value=same):
+                request.return_value = {'status': 'ready', 'bounds': [8, 61, 120, 82], 'token': 'opaque'}
+                self.capture.return_value = (1, 1000, b'old frame')
+                view = self.phone.observe(editor=True)
+                self.capture.return_value = (2, 1001, b'new frame')
+                request.return_value = {'status': 'verified'}
+                if same:
+                    self.assertTrue(self.phone.act('text', view['observation_id'], text='中文')['readback'])
+                else:
+                    with self.assertRaisesRegex(device.PhoneError, 'Screen changed'):
+                        self.phone.act('text', view['observation_id'], text='中文')
+        self.call.assert_not_called()
+
+    def test_native_failure_never_replays_via_key_events(self):
+        self.phone.native_text = True
+        binding = {'status': 'ready', 'bounds': [8, 61, 120, 82], 'token': 'opaque'}
+        for status in ('not_applied', 'unconfirmed'):
+            replies = [binding, {'status': status, 'reason': 'target_changed'}]
+            with self.subTest(status=status), patch.object(device, 'request_editor', side_effect=replies) as native:
+                view = self.phone.observe(editor=True)
+                with self.assertRaises(device.TextInputError) as ctx:
+                    self.phone.act('text', view['observation_id'], text='hello')
+                self.assertEqual(ctx.exception.receipt['effect'], status)
+                self.assertEqual(ctx.exception.receipt['retry_safe'], status == 'not_applied')
+                self.assertEqual(native.call_count, 2)
+        self.call.assert_not_called()
+
+    def test_observing_password_field_allows_other_actions_but_never_types(self):
+        self.phone.native_text = True
+        native = self.start_patch('request_editor', return_value={'status': 'not_applied', 'reason':'password_field'})
+        view = self.phone.observe(editor=True)
+        self.assertEqual(view['editor']['reason'], 'password_field')
+        with self.assertRaises(device.TextInputError):
+            self.phone.act('text', view['observation_id'], text='hello')
+        native.assert_called_once_with(self.screen, 'inspect')
+        self.call.assert_not_called()
+
     def test_changed_window_and_primary_package_do_not_receive_actions(self):
         observation = self.phone.observe()
         self.screen_call.return_value = device.Screen(8, 160, 120, 44, 'moon/Game', 'other/.UI')
@@ -82,6 +158,25 @@ class PhoneDeviceTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+    def test_caret_may_change_but_screen_elsewhere_must_match(self):
+        try:
+            from PIL import Image, ImageDraw
+        except ImportError:
+            self.skipTest('Install vision to compare frames')
+        img = Image.new('RGB', (160, 120), 'white')
+        def png():
+            output = device.io.BytesIO()
+            img.save(output, 'PNG')
+            return output.getvalue()
+        original = png()
+        bounds = (10, 80, 115, 112)
+        draw = ImageDraw.Draw(img)
+        draw.rectangle((24, 92, 25, 105), fill='black')
+        self.assertTrue(device._same_except_caret(original, png(), bounds))
+        draw.rectangle((33, 94, 37, 101), fill='black')
+        self.assertFalse(device._same_except_caret(original, png(), bounds))
+        draw.rectangle((35, 7, 45, 19), fill='black')
+        self.assertFalse(device._same_except_caret(original, png(), bounds))
     def test_tap_guard_allows_small_remote_animation_and_rejects_changed_target(self):
         try:
             from PIL import Image, ImageDraw

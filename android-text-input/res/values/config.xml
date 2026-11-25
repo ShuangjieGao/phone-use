@@ -1,0 +1,4 @@
+<resources>
+    <bool name="connection_available">false</bool>
+    <string name="editor_description">Insert and verify Unicode in the secondary display editor selected by the local phone-use host. Your usual keyboard remains active.</string>
+</resources>

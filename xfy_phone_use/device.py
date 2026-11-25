@@ -11,13 +11,23 @@ import socket
 import struct
 import subprocess
 import time
+import unicodedata
 from dataclasses import dataclass
 
 from .display import foreground_activity, window_activities as _windows
+from .native_text import request_editor
 
 
 class PhoneError(RuntimeError):
     """An operation failed or could not be verified on the secondary display."""
+
+
+class TextInputError(PhoneError):
+    def __init__(self, status, reason):
+        super().__init__(reason)
+        self.receipt = {'action': 'text', 'effect': status,
+                        'submitted': False if status == 'not_applied' else None,
+                        'retry_safe': status == 'not_applied', 'error': reason}
 
 
 @dataclass(frozen=True)
@@ -118,12 +128,37 @@ def _same_tap_target(before, after, bounds):
         return False
 
 
+def _same_except_caret(before, after, bounds):
+    """Allow a thin caret-sized change inside an independently bound native editor."""
+    try:
+        from PIL import Image, ImageChops
+        old = Image.open(io.BytesIO(before)).convert('RGB')
+        new = Image.open(io.BytesIO(after)).convert('RGB')
+        if old.size != new.size:
+            return False
+        red, green, blue = ImageChops.difference(old, new).split()
+        delta = ImageChops.lighter(red, ImageChops.lighter(green, blue))
+        mask = delta.point(lambda v: 255 if v >= 24 else 0)
+        changed = mask.getbbox()
+        if changed is None:
+            return True
+        x, y, right, bottom = changed
+        if bounds and not (bounds[0] <= x < right <= bounds[2] and bounds[1] <= y < bottom <= bounds[3]):
+            return False
+        w, h = right - x, bottom - y
+        return (w <= max(3, old.width // 75) and 2*w <= h <= max(16, old.height // 12)
+                and mask.crop(changed).histogram()[255] >= w*h/2)
+    except (ImportError, OSError, ValueError):
+        return False
+
+
 class PhoneDevice:
     def __init__(self):
         self.runtime = Path(os.environ.get('XFY_PHONE_RUNTIME', '/run/xfy-phone-use'))
         self.observation = None
         self.primary = None
         self.input_frame = None
+        self.native_text = os.environ.get('PHONE_USE_TEXT_HELPER') == '1'
 
     def _screen(self):
         path = self.runtime / 'screen.sock'
@@ -167,9 +202,15 @@ class PhoneDevice:
             raise PhoneError('Display or foreground changed during capture; observe again')
         return seq, timestamp, png
 
-    def observe(self, screenshot=False, elements=True):
+    def observe(self, screenshot=False, elements=True, editor=False):
         self.observation = None
         screen = self._screen()
+        binding = None
+        if editor:
+            if self.native_text and screen.activity:
+                binding = request_editor(screen, 'inspect')
+            else:
+                binding = {'status': 'not_applied', 'reason': 'no_activity' if self.native_text else 'helper_disabled'}
         deadline = time.monotonic() + 2
         while True:
             seq, timestamp, png = self._capture(screen)
@@ -180,13 +221,15 @@ class PhoneDevice:
             time.sleep(.1)
         found, warning = _ocr(png, screen.width, screen.height) if elements else ([], None)
         observation_id = secrets.token_hex(12)
-        self.observation = (observation_id, screen, png, found)
+        self.observation = (observation_id, screen, png, found, binding)
         result = {'observation_id': observation_id, 'display_id': screen.display,
                   'width': screen.width, 'height': screen.height, 'activity': screen.activity,
                   'source': 'ocr' if elements else 'frame', 'elements': found,
                   'frame_sequence': seq, 'captured_ms': timestamp}
         if warning:
             result['warning'] = warning
+        if binding is not None:
+            result['editor'] = {k: v for k, v in binding.items() if k != 'token'}
         if screenshot:
             result['image_png'] = png
         return result
@@ -228,7 +271,7 @@ class PhoneDevice:
         old = self.observation
         if not old or observation_id != old[0]:
             raise PhoneError('Unknown or expired observation; observe again')
-        _, screen, old_png, elements = old
+        _, screen, old_png, elements, binding = old
         if not screen.activity:
             raise PhoneError('No focused secondary application')
         def point(px, py):
@@ -255,9 +298,16 @@ class PhoneDevice:
         elif action == 'swipe':
             args = ['swipe', *point(x, y), *point(to_x, to_y), '320']
         elif action == 'text':
-            if not isinstance(text, str) or not re.fullmatch(r'[ -~]+', text) or '%s' in text:
-                raise PhoneError('Android input text supports printable ASCII here; literal %s and Unicode are unsupported')
-            args = ['text', text.replace(' ', '%s')]
+            if not isinstance(text, str) or not text or any(
+                    unicodedata.category(c) in ('Cc', 'Cs', 'Zl', 'Zp') for c in text):
+                raise PhoneError('Expected single-line text without control characters')
+            if self.native_text and len(text.encode('utf-16-le')) > 8192:
+                raise TextInputError('not_applied', 'The native editor accepts up to 4096 UTF-16 units per call.')
+            if not self.native_text:
+                if not re.fullmatch(r'[ -~]+', text) or '%s' in text:
+                    raise TextInputError('not_applied', 'Unicode and literal %s require the native text helper '
+                                         '(PHONE_USE_TEXT_HELPER=1).')
+                args = ['text', text.replace(' ', '%s')]
         elif action == 'key':
             keys = {'back': 'KEYCODE_BACK', 'enter': 'KEYCODE_ENTER', 'del': 'KEYCODE_DEL'}
             if key not in keys:
@@ -270,8 +320,14 @@ class PhoneDevice:
             raise PhoneError('Foreground or display changed; observe again')
         _, _, png = self._capture(screen)
         self.observation = None
-        if png != old_png and (action != 'tap' or not _same_tap_target(old_png, png, target_bounds)):
-            raise PhoneError('Screen changed; observe again before acting')
+        if png != old_png:
+            same_tap = action == 'tap' and _same_tap_target(old_png, png, target_bounds)
+            same_editor = (action == 'text' and self.native_text and binding and binding['status'] == 'ready'
+                           and _same_except_caret(old_png, png, binding.get('bounds')))
+            if not (same_tap or same_editor):
+                raise PhoneError('Screen changed; observe again before acting')
+        if action == 'text' and self.native_text:
+            return self._insert(screen, png, binding, text)
         self.input_frame = (screen.socket_inode, int(time.time()*1000))
         _android('input', '-d', str(screen.display), *args)
         after = self._screen()
@@ -279,6 +335,32 @@ class PhoneDevice:
             raise PhoneError('Display changed after input; outcome unconfirmed')
         return {'submitted': True, 'display_id': screen.display, 'action': action,
                 'activity': after.activity, 'effect': 'unverified'}
+
+    def _insert(self, screen, reference_png, binding, text):
+        if binding is None:
+            binding = request_editor(screen, 'inspect')
+            if binding['status'] == 'ready':
+                _, _, current = self._capture(screen)
+                if current != reference_png and not _same_except_caret(reference_png, current, binding.get('bounds')):
+                    raise TextInputError('not_applied', 'Screen changed while binding the editor; observe again.')
+        if binding['status'] != 'ready':
+            raise TextInputError('not_applied', 'Native editor unavailable: ' + binding['reason'])
+        if self._screen() != screen:
+            raise TextInputError('not_applied', 'Foreground changed before input; observe again.')
+        requested_at = int(time.time()*1000)
+        result = request_editor(screen, 'insert', token=binding['token'], text=text,
+                                transport=binding.get('transport', 'instrumentation'))
+        if result['status'] == 'not_applied':
+            raise TextInputError('not_applied', 'Native input declined: ' + result['reason'])
+        self.input_frame = (screen.socket_inode, requested_at)
+        if result['status'] == 'verified':
+            try:
+                if self._screen() == screen:
+                    return {'submitted': True, 'display_id': screen.display, 'action': 'text',
+                            'activity': screen.activity, 'effect': 'verified', 'readback': True}
+            except PhoneError:
+                pass
+        raise TextInputError('unconfirmed', 'Text may have changed. Inspect the editor before retrying.')
 
     def close(self):
         self.observation = None

@@ -1,3 +1,6 @@
 include README.en.md
 include examples/check.py
+include android-text-input/README.md android-text-input/AndroidManifest.xml android-text-input/build-apk.sh
+recursive-include android-text-input/src *.java
+recursive-include android-text-input/res *.xml
 recursive-include docs/images *.gif *.mp4 *.png *.svg

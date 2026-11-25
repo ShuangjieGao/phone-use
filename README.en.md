@@ -1,20 +1,21 @@
 # phone-use
 
-[简体中文](README.md) · [Install from source](#quick-start) · [Connect your assistant](#connect-your-mcp-client)
+[简体中文](README.md) · [Install from source](#quick-start) · [Connect your assistant](#connect-your-mcp-client) · [Type Chinese text](#type-chinese-text)
 
 **Play Stardew Valley on the main display of an Android tablet while an assistant uses a different app.** phone-use exposes seven stdio MCP tools for observing and controlling an Android virtual display. Tested on rooted Android 13 with an ARM64 Debian chroot.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/stardew-wechat-poster.png">
-  <img src="docs/images/stardew-wechat.gif" alt="Two complete displays on one Android tablet. The character walks through the Stardew Valley farm while the assistant confirms a WeChat Favorite. WeChat then displays its saved confirmation.">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/wechat-filehelper-zh-poster.png">
+  <img src="docs/images/wechat-filehelper-zh.gif" alt="Two full displays on one tablet. Stardew Valley runs on the left. On the right the assistant types and sends a Chinese seed-budget message to WeChat File Transfer Assistant. Only the sender avatar is masked.">
 </picture>
 
 | While the game stays on the main display | On the virtual display | Full recording |
 | --- | --- | --- |
+| The player walks across the farm. | Xiaofeiyu types a Chinese seed-budget message in WeChat File Transfer Assistant, verifies the text in the editor, then taps Send once. Only the sender avatar is masked in the public capture. | [Chinese message · 43 s](docs/images/wechat-filehelper-zh.mp4) · [Full-size still](docs/images/wechat-filehelper-zh-poster.png) |
 | The player walks outside the farmhouse. | The assistant confirms saving a sample seed shopping list in WeChat Favorites. The list uses Android sharing; no personal conversations appear. | [WeChat · 24 s](docs/images/stardew-wechat.mp4) · [Full-size still](docs/images/stardew-wechat-poster.png) |
 | The player moves across the farm. | The assistant opens Calculator. A demo script enters `24 × 20` through MCP and reads back **480 gold**. | [Calculator · 23 s](docs/images/stardew-fullscreen.mp4) · [Full-size still](docs/images/stardew-fullscreen-poster.png) |
 
-Both examples show the full, synchronized displays of the same tablet running the Android edition of the game. Each recording plays continuously at its original speed.
+Each example shows the full, synchronized displays of the same tablet running the Android edition of the game. The recordings play continuously at their original speed.
 
 ## Quick start
 
@@ -67,6 +68,20 @@ Configure the client to launch this stdio server inside the same chroot, under t
 }
 ```
 
+### Type Chinese text
+
+On Android 11 or later, install the optional [native editor helper](android-text-input/README.md). From the checkout on a Linux build host with a JDK, Android SDK Platform 35 and Build Tools, run:
+
+```sh
+# Set ANDROID_HOME to your installed Android SDK.
+sh android-text-input/build-apk.sh
+adb install -r android-text-input/phone-use-text-input.apk
+```
+
+You can also build in WSL and install the resulting APK with the ADB connected to your tablet. Add `"PHONE_USE_TEXT_HELPER": "1"` to the MCP client's `env` and reconnect. On Android 13 or later, an app may hide its editable accessibility nodes on a virtual display, as WeChat does on the tested tablet. If necessary, enable **phone-use local text input** in Android's Accessibility settings under installed services. This is a system-level grant. The helper uses the editor's input connection, leaves your default keyboard in place and does not use the clipboard. You can disable it in the same settings.
+
+Focus the field, call `phone_observe(editor=true, elements=false)`, and pass that observation ID to `phone_type`. A `readback: true` result means the helper read the expected text back from the same editor. If the result is `unconfirmed`, inspect the current text before retrying. Sending a chat message is a separate tap.
+
 ## Check the connection
 
 With the display running, execute this from the repository root in the chroot. It checks the MCP server and display without tapping anything.
@@ -94,7 +109,7 @@ Look for `480` on the virtual display. On the test tablet, Calculator's package 
 | `phone_observe` | Returns an observation ID and OCR text regions. Screenshots are opt-in. |
 | `phone_tap` | Taps a text region by ID or a point in the observed screen's pixel coordinates. |
 | `phone_swipe` | Swipes between two points on the observed screen. |
-| `phone_type` | Types printable ASCII into a focused input. OCR can read English and Simplified Chinese. |
+| `phone_type` | Types single-line text into the focused field. The native editor helper supports Chinese and verifies the result; keyboard mode supports printable ASCII. |
 | `phone_key` | Sends `back`, `enter` or `del`. |
 
 ## Watch the assistant and troubleshoot
