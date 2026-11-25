@@ -1,4 +1,4 @@
-"""Own one scrcpy 4.1 virtual display and serve its latest PNG to XFY-phone-use."""
+"""Own one scrcpy 4.1 virtual display and serve its latest PNG to phone-use."""
 
 import argparse
 import contextlib

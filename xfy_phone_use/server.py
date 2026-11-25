@@ -1,4 +1,4 @@
-"""Run the XFY-phone-use MCP server over newline-delimited UTF-8 stdio."""
+"""Run the phone-use MCP server over newline-delimited UTF-8 stdio."""
 
 import base64
 import json
@@ -135,7 +135,7 @@ class Server:
             return {
                 "protocolVersion": version if version in VERSIONS else VERSIONS[0],
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "XFY-phone-use", "version": __version__},
+                "serverInfo": {"name": "phone-use", "version": __version__},
                 "instructions": "Use phone_observe before each input. Prefer element IDs and request a screenshot when needed.",
             }
         if not self.initialized:
@@ -170,7 +170,7 @@ class Server:
             error = {"code": exc.code, "message": str(exc)}
         except Exception as exc:
             # Do not include requests, typed text or device output in protocol logs.
-            print(f"XFY-phone-use: unexpected {type(exc).__name__}", file=sys.stderr)
+            print(f"phone-use: unexpected {type(exc).__name__}", file=sys.stderr)
             error = {"code": -32603, "message": "Internal server error."}
         return {"jsonrpc": "2.0", "id": request_id, "error": error}
 

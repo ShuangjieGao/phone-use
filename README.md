@@ -1,8 +1,8 @@
-# XFY-phone-use
+# phone-use
 
 让支持 MCP 的助手在 Android 平板上使用一块独立的虚拟屏。助手可以观察界面、点按钮、滑动和打开应用。人在主屏上继续使用其他应用，也可以从电脑只读观看助手正在操作的那块屏。
 
-`xfy-phone-display` 在平板上创建副屏，`xfy-phone-use` 通过标准输入输出（stdio）向 MCP 客户端提供 7 个工具。可以单独接入自己的助手。项目最初用于小肥鱼，已在 Android 13、ARM64 Debian chroot 上实测。
+`phone-display` 在平板上创建副屏，`phone-use` 通过标准输入输出（stdio）向 MCP 客户端提供 7 个工具。可以单独接入自己的助手。项目最初用于小肥鱼，已在 Android 13、ARM64 Debian chroot 上实测。
 
 ## 运行环境
 
@@ -21,13 +21,13 @@ if ((Get-FileHash .\scrcpy-server-v4.1 -Algorithm SHA256).Hash -ne $expected) { 
 adb push scrcpy-server-v4.1 /data/local/tmp/scrcpy-server-v4.1.jar
 ```
 
-**2. 在平板的 Debian chroot 内安装。** 以下命令以 root 执行。Release 的 wheel 可直接安装，Python 虚拟环境会放在 `/opt/xfy-phone-venv`。[下载发行包](https://github.com/ShuangjieGao/XFY-phone-use/releases/tag/v0.1.0)
+**2. 在平板的 Debian chroot 内安装。** 以下命令以 root 执行。Release 的 wheel 可直接安装，Python 虚拟环境会放在 `/opt/xfy-phone-venv`。[下载发行包](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.1)
 
 ```sh
 apt-get update
 apt-get install -y python3-venv util-linux ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
 python3 -m venv /opt/xfy-phone-venv
-/opt/xfy-phone-venv/bin/python -m pip install 'xfy-phone-use[vision] @ https://github.com/ShuangjieGao/XFY-phone-use/releases/download/v0.1.0/xfy_phone_use-0.1.0-py3-none-any.whl'
+/opt/xfy-phone-venv/bin/python -m pip install 'phone-use[vision] @ https://github.com/ShuangjieGao/phone-use/releases/download/v0.1.1/phone_use-0.1.1-py3-none-any.whl'
 ```
 
 从源码安装时，在仓库目录运行 `/opt/xfy-phone-venv/bin/python -m pip install '.[vision]'`。
@@ -35,12 +35,21 @@ python3 -m venv /opt/xfy-phone-venv
 **3. 在平板上启动副屏。** 示例用 `com.android.settings` 打开系统设置。也可以将包名换为设备上已安装、且能在副屏运行的应用。先把主屏切到另一个应用，保持主屏前台可识别。
 
 ```sh
-/opt/xfy-phone-venv/bin/xfy-phone-display run \
+/opt/xfy-phone-venv/bin/phone-display run \
   --server-jar /data/local/tmp/scrcpy-server-v4.1.jar \
   --package com.android.settings --width 900 --height 1600 --density 360
 ```
 
-保持这个进程运行。启动成功后终端输出含 `id`、`width` 和 `height` 的 JSON，随后模型即可操作。`--server-jar` 填从 Android 一侧看到的路径。要释放虚拟屏，可以在另一个 Debian 终端运行 `/opt/xfy-phone-venv/bin/xfy-phone-display stop`。
+保持这个进程运行。启动成功后终端输出含 `id`、`width` 和 `height` 的 JSON，随后模型即可操作。`--server-jar` 填从 Android 一侧看到的路径。要释放虚拟屏，可以在另一个 Debian 终端运行 `/opt/xfy-phone-venv/bin/phone-display stop`。
+
+### 从 v0.1.0 升级
+
+已用旧版 `xfy-phone-use` 的用户，请先下载本项目 v0.1.1 的 wheel，再在原来安装它的虚拟环境中依次执行以下命令。两个发行包使用相同的 Python 模块，先卸载旧包再装新包可以避免文件互相覆盖。旧的 `xfy-phone-use` 和 `xfy-phone-display` 命令在新版中仍可使用，原有 MCP 客户端配置可继续工作。
+
+```sh
+/opt/xfy-phone-venv/bin/python -m pip uninstall -y xfy-phone-use
+/opt/xfy-phone-venv/bin/python -m pip install './phone_use-0.1.1-py3-none-any.whl[vision]'
+```
 
 ## 连接 MCP 客户端
 
@@ -49,8 +58,8 @@ python3 -m venv /opt/xfy-phone-venv
 ```json
 {
   "mcpServers": {
-    "xfy-phone-use": {
-      "command": "/opt/xfy-phone-venv/bin/xfy-phone-use",
+    "phone-use": {
+      "command": "/opt/xfy-phone-venv/bin/phone-use",
       "env": { "XFY_PHONE_RUNTIME": "/run/xfy-phone-use" }
     }
   }

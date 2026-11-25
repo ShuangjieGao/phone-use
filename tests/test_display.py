@@ -23,7 +23,7 @@ def tiny_png():
 class RuntimeTests(unittest.TestCase):
     def test_run_requires_an_explicit_app(self):
         errors = io.StringIO()
-        args = ['xfy-phone-display', 'run', '--server-jar', '/example/server.jar']
+        args = ['phone-display', 'run', '--server-jar', '/example/server.jar']
         with patch('sys.argv', args), contextlib.redirect_stderr(errors):
             with self.assertRaises(SystemExit) as raised:
                 display.main()

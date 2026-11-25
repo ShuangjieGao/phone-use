@@ -4,6 +4,7 @@ import json
 import unittest
 from unittest.mock import Mock
 
+from xfy_phone_use import __version__
 from xfy_phone_use.server import Server, serve
 
 
@@ -33,7 +34,9 @@ class ProtocolTests(unittest.TestCase):
         })
         self.factory.assert_not_called()
         new = Server(self.factory, DeviceError)
-        self.assertEqual(new.dispatch("initialize", {"protocolVersion": "2025-03-26"})["protocolVersion"], "2025-03-26")
+        response = new.dispatch("initialize", {"protocolVersion": "2025-03-26"})
+        self.assertEqual(response["protocolVersion"], "2025-03-26")
+        self.assertEqual(response["serverInfo"], {"name": "phone-use", "version": __version__})
 
     def test_observe_sends_image_once(self):
         raw = b"image-data-for-test"
