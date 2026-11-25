@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xfy-phone-use"
+dynamic = ["version"]
+description = "MCP tools for observing and operating an Android secondary display from a Debian chroot."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+keywords = ["android", "mcp", "scrcpy"]
+classifiers = [
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+]
+
+[project.optional-dependencies]
+vision = ["Pillow>=9.1"]
+
+[project.urls]
+Repository = "https://github.com/ShuangjieGao/XFY-phone-use"
+Issues = "https://github.com/ShuangjieGao/XFY-phone-use/issues"
+
+[project.scripts]
+xfy-phone-use = "xfy_phone_use.server:main"
+xfy-phone-display = "xfy_phone_use.display:cli"
+
+[tool.setuptools]
+packages = ["xfy_phone_use"]
+include-package-data = false
+
+[tool.setuptools.dynamic]
+version = {attr = "xfy_phone_use.__version__"}
