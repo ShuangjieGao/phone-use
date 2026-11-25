@@ -4,9 +4,14 @@
 
 **给 AI 一块独立的安卓副屏，你继续使用主屏。** 我们在同一台平板上用 Moonlight 串流，同时让助手在虚拟屏上打开另一个应用。想看看助手点了什么？在电脑上打开这块副屏的只读预览即可。
 
-![双屏示意：一台平板的主屏显示游戏串流，AI 在独立虚拟屏使用计算器，电脑可以只读观看副屏。](docs/images/two-displays.svg)
+项目最初为小肥鱼开发，也能接入其他支持 MCP stdio 的助手。**实测环境**为已 root 的 Android 13 平板和 ARM64 Debian chroot。
 
-项目最初为小肥鱼开发，可以接入支持 **MCP stdio** 的其他助手。已在 **Android 13 + ARM64 Debian chroot** 上实测，需要已 root 的设备。
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/phone-use-demo-still.png">
+  <img src="docs/images/phone-use-demo.gif" alt="双屏工作流程示意：主屏的赛车串流继续，助手在同一设备的虚拟副屏把计算器从 DEG 切到 RAD，读回新单位，再恢复 DEG。">
+</picture>
+
+*8 秒流程示意。看右侧单位键，助手点按后会再观察一次，确认画面上出现了 `RAD`。* [单独查看 GIF](docs/images/phone-use-demo.gif) · [静态操作步骤](docs/images/observe-act.svg)
 
 | 使用时你关心什么 | phone-use 怎样处理 |
 | --- | --- |
@@ -130,4 +135,4 @@ python -m unittest discover -s tests -v
 
 本项目按 [GNU AGPL-3.0-only](LICENSE) 开源。scrcpy、FFmpeg、Tesseract 和 Pillow 独立安装，适用各自的上游许可证。
 
-如果你也在手机或平板上跑通了，欢迎在 [Issues](https://github.com/ShuangjieGao/phone-use/issues) 分享设备型号、Android 版本和哪个应用能在副屏上运行。这些记录可以帮助下一个人判断自己的设备是否合适。觉得这个工具有用，可以点 **Star** 收藏，或用[这张介绍图](docs/images/phone-use-card.png)分享项目。
+如果你也在手机或平板上跑通了，欢迎在 [Issues](https://github.com/ShuangjieGao/phone-use/issues) 分享设备型号、Android 版本和哪个应用能在副屏上运行。这些记录可以帮助下一个人判断自己的设备是否合适。觉得这个工具有用，可以点 **Star** 收藏，或用[3D 项目介绍图](docs/images/phone-use-card.png)分享给朋友。

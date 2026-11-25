@@ -1,10 +1,15 @@
 # phone-use
 
-[简体中文](README.md) · [Download v0.1.1](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.1) · [AGPL-3.0-only](LICENSE)
+[简体中文](README.md) · [Quick start](#quick-start) · [Try the calculator](#try-it-with-a-calculator) · [Download v0.1.1](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.1)
 
 Give an AI assistant its own Android display. You can keep a game stream on your tablet while the assistant opens a calculator on a virtual display on the **same device**. A desktop viewer can show you exactly what the assistant sees.
 
-![One Android device with a main display for the person and a separate virtual display for the assistant.](docs/images/two-displays.svg)
+<picture>
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/phone-use-demo-still.png">
+  <img src="docs/images/phone-use-demo.gif" alt="Illustrated workflow: a racing game keeps running on the main display while the assistant switches the calculator from DEG to RAD on its virtual display, reads it back and restores DEG.">
+</picture>
+
+*Eight-second illustrated walkthrough. Watch the unit button on the right: after tapping, the assistant reads the screen again to confirm `RAD`.* [Open the GIF](docs/images/phone-use-demo.gif) · [Static walkthrough](docs/images/observe-act.svg)
 
 We tested phone-use on **rooted Android 13 with an ARM64 Debian chroot**. The assistant connects over Model Context Protocol (MCP) using standard input and output. It can read text with OCR, request a screenshot when it needs to see an icon, and tap a target from the latest observation.
 
@@ -109,4 +114,4 @@ You can close the viewer while the assistant keeps using its display. To release
 
 To run the source tests, use `python -m unittest discover -s tests -v` from the repository root.
 
-Trying a different device? [Share a compatibility report](https://github.com/ShuangjieGao/phone-use/issues) with the device model, Android version and app you tested. If phone-use helped you, you can star the repo or share the [project card](docs/images/phone-use-card.png).
+Trying a different device? [Share a compatibility report](https://github.com/ShuangjieGao/phone-use/issues) with the device model, Android version and app you tested. If phone-use helped you, you can star the repo or share the [3D project card](docs/images/phone-use-card.png).
