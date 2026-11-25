@@ -5,9 +5,11 @@
 **Play Stardew Valley on the main display of an Android tablet while an assistant uses a different app.** phone-use exposes seven stdio MCP tools for observing and controlling an Android virtual display. Tested on rooted Android 13 with an ARM64 Debian chroot.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/wechat-filehelper-zh-poster.png">
-  <img src="docs/images/wechat-filehelper-zh.gif" alt="Two full displays on one tablet. Stardew Valley runs on the left. On the right the assistant types and sends a Chinese seed-budget message to WeChat File Transfer Assistant. Only the sender avatar is masked.">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/stardew-jerry-zh-poster.png">
+  <img src="docs/images/stardew-jerry-zh.gif" alt="Both displays of one tablet: Android Stardew Valley on the main display, and a verified WeChat contact on the virtual display. The assistant sends the Chinese draft and the outgoing bubble appears. Private parts of older content are masked.">
 </picture>
+
+This 34-second recording starts with the Chinese draft already in the editor. The assistant confirms the contact and text, then taps Send. Both displays are shown in full. Avatars, an old attachment name and parts of earlier messages are masked in the public copy. [Watch the direct message](docs/images/stardew-jerry-zh.mp4) · [Zoom in on the sent message](docs/images/stardew-jerry-zh-poster.png)
 
 | While the game stays on the main display | On the virtual display | Full recording |
 | --- | --- | --- |

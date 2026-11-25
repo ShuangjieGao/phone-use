@@ -5,9 +5,11 @@
 **在安卓主屏玩《星露谷物语》，让助手在副屏处理另一件事。** `phone-use` 提供 7 个 MCP 工具，供助手观察并操作独立的安卓虚拟显示器。支持 stdio，已在 root 的 Android 13 平板和 ARM64 Debian chroot 上使用。
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/wechat-filehelper-zh-poster.png">
-  <img src="docs/images/wechat-filehelper-zh.gif" alt="同一台平板的完整双屏实录：左边的星露谷角色在农场走动，右边的微信文件传输助手收到一条「买种子需要四百八十金」。公开画面遮挡了发送者头像。">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/stardew-jerry-zh-poster.png">
+  <img src="docs/images/stardew-jerry-zh.gif" alt="同一台平板的完整双屏实录：主屏运行安卓版星露谷，副屏在微信好友私聊里发送中文草稿，随后显示一条绿色消息气泡。头像与旧消息中的隐私区域已遮挡。">
 </picture>
+
+这段 34 秒实录从已写好的中文草稿开始：助手核对收件人与正文后点击「发送」，微信显示「买种子需要四百八十金」。两块屏幕保留完整画幅；公开画面局部遮挡头像、旧附件名和部分旧内容。[观看好友私聊发送实录](docs/images/stardew-jerry-zh.mp4) · [放大查看发送结果](docs/images/stardew-jerry-zh-poster.png)
 
 | 主屏继续玩游戏时 | 副屏在做什么 | 全幅原速演示 |
 | --- | --- | --- |
