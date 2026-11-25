@@ -1,23 +1,24 @@
 # phone-use
 
-[简体中文](README.md) · [Quick start](#quick-start) · [Try the calculator](#try-it-with-a-calculator) · [Download v0.1.2](https://github.com/ShuangjieGao/phone-use/releases/tag/v0.1.2)
+[简体中文](README.md) · [Install from source](#quick-start) · [Connect your assistant](#connect-your-mcp-client)
 
-Give an AI assistant its own Android display. In this real tablet capture, Android Clock keeps time on the main display while Xiaofeiyu’s AgY model opens Xiaomi Calculator on a virtual display using `phone_launch`. Both feeds use the same device clock.
+**Play Stardew Valley on the main display of an Android tablet while an assistant uses a different app.** phone-use exposes seven stdio MCP tools for observing and controlling an Android virtual display. Tested on rooted Android 13 with an ARM64 Debian chroot.
 
 <picture>
-  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/phone-use-demo-still.png">
-  <img src="docs/images/phone-use-demo.gif" alt="Native Android tablet capture: the stopwatch on the left keeps running as the calculator opens on the right. Later, the angle-mode key switches from deg to rad and back while the stopwatch advances.">
+  <source media="(prefers-reduced-motion: reduce)" srcset="docs/images/stardew-wechat-poster.png">
+  <img src="docs/images/stardew-wechat.gif" alt="Two complete displays on one Android tablet. The character walks through the Stardew Valley farm while the assistant confirms a WeChat Favorite. WeChat then displays its saved confirmation.">
 </picture>
 
-*The 13-second GIF shows two excerpts from one take at their original speed, with about 57 seconds omitted between them. Watch the stopwatch while the other display opens Calculator, then watch its angle-mode key change.* [Watch the continuous 70-second recording (MP4)](docs/images/phone-use-continuous.mp4) · [View a synchronized still](docs/images/phone-use-demo-still.png)
+| While the game stays on the main display | On the virtual display | Full recording |
+| --- | --- | --- |
+| The player walks outside the farmhouse. | The assistant confirms saving a sample seed shopping list in WeChat Favorites. The list uses Android sharing; no personal conversations appear. | [WeChat · 24 s](docs/images/stardew-wechat.mp4) · [Full-size still](docs/images/stardew-wechat-poster.png) |
+| The player moves across the farm. | The assistant opens Calculator. A demo script enters `24 × 20` through MCP and reads back **480 gold**. | [Calculator · 23 s](docs/images/stardew-fullscreen.mp4) · [Full-size still](docs/images/stardew-fullscreen-poster.png) |
 
-ADB supplied the main-display Start tap. The model requested the calculator launch; a test script used the same MCP tools for the later angle-mode taps and readbacks. Each feed shows a crop of the native app, with a waiting label until the first verified calculator frame.
-
-We tested phone-use on **rooted Android 13 with an ARM64 Debian chroot**. The assistant connects over Model Context Protocol (MCP) using standard input and output. It can read text with OCR, request a screenshot when it needs to see an icon, and tap a target from the latest observation.
+Both examples show the full, synchronized displays of the same tablet running the Android edition of the game. Each recording plays continuously at its original speed.
 
 ## Quick start
 
-You need a rooted Android device with a Debian chroot that can access Android's PID 1, mount namespace and abstract Unix sockets. The chroot needs Python 3.9+, permission to run `nsenter`, and FFmpeg with `-fps_mode` support. Use **scrcpy-server 4.1** for this release.
+You need a rooted Android device with a Debian chroot that can access Android's PID 1, mount namespace and abstract Unix sockets. The chroot needs Python 3.9+, permission to run `nsenter`, and FFmpeg with `-fps_mode` support. Use **scrcpy-server 4.1** with phone-use.
 
 **1. Put scrcpy-server on the Android device.** On a Windows PC with ADB connected, run the following in PowerShell. If multiple devices are connected, add `-s <serial>` to the ADB command. The checksum is for the official 4.1 server. [Upstream release](https://github.com/Genymobile/scrcpy/releases/tag/v4.1)
 
@@ -28,16 +29,18 @@ if ((Get-FileHash .\scrcpy-server-v4.1 -Algorithm SHA256).Hash -ne $expected) { 
 adb push scrcpy-server-v4.1 /data/local/tmp/scrcpy-server-v4.1.jar
 ```
 
-**2. Install phone-use inside Debian.** Run these commands as root. The `vision` extra adds Pillow so the server can compare the area around a tap target when another part of the screen animates.
+**2. Install from source in the tablet's Debian chroot.** Run as root. If you already have a checkout, use that directory.
 
 ```sh
 apt-get update
-apt-get install -y python3-venv util-linux ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
+apt-get install -y git python3-venv util-linux ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
+git clone https://github.com/ShuangjieGao/phone-use.git
+cd phone-use
 python3 -m venv /opt/xfy-phone-venv
-/opt/xfy-phone-venv/bin/python -m pip install 'phone-use[vision] @ https://github.com/ShuangjieGao/phone-use/releases/download/v0.1.2/phone_use-0.1.2-py3-none-any.whl'
+/opt/xfy-phone-venv/bin/python -m pip install '.[vision]'
 ```
 
-Upgrading from v0.1.0? Download the new wheel first. In your existing venv, run `python -m pip uninstall xfy-phone-use`, then `python -m pip install './phone_use-0.1.2-py3-none-any.whl[vision]'`. Both releases share a Python import path. The old CLI names remain available as aliases in v0.1.2.
+If this venv still contains the old package named `xfy-phone-use`, uninstall that package before installing from the checkout. Both package names share a Python import path.
 
 **3. Start the display.** Leave a different app in the foreground on the main display. This example opens Settings on the virtual display. Replace the package name with the Android app you want to use.
 
@@ -49,7 +52,9 @@ Upgrading from v0.1.0? Download the new wheel first. In your existing venv, run 
 
 The command prints a display ID and dimensions when ready. Leave it running.
 
-**4. Connect your MCP client.** Configure the client to launch the following stdio server **inside the same chroot and under the same UID** as the display runtime. Both processes use the private socket in `XFY_PHONE_RUNTIME`.
+## Connect your MCP client
+
+Configure the client to launch this stdio server inside the same chroot, under the same UID as the display runtime. Both processes must use the same private socket directory.
 
 ```json
 {
@@ -70,30 +75,15 @@ With the display running, execute this from the repository root in the chroot. I
 python3 examples/check.py --server /opt/xfy-phone-venv/bin/phone-use
 ```
 
-If you installed the wheel on its own, ask your MCP client to call `phone_status` and report the display ID and dimensions. Look for `ready: true` before trying an input.
+You can also ask your MCP client to call `phone_status` and report the display ID and dimensions. Look for `ready: true` before trying an input.
 
-The v0.1.2 check on the same tablet after the calculator close-up returned:
-
-```text
-Server   phone-use 0.1.2
-Tools    7 available
-Display  ready, 900 x 1600 px
-Frame    received (OCR off, screenshot off)
-```
-
-If the check reports `primary foreground unverified`, bring an app to the foreground on the main display and run it again. Version 0.1.2 recognizes Android’s short and fully qualified names for the same Activity. Different foreground components still stop the check.
+Look for `Display  ready` and `Frame    received`. If you see `primary foreground unverified`, unlock the device, leave an app open on the main display and run the check again.
 
 ## Try it with a calculator
 
-For a first run, use a calculator with a **DEG/RAD** toggle. On the tested Xiaomi tablet its package was `com.miui.calculator`. Try the following prompt, substituting the package name on your device.
+> Open Calculator on the virtual display. Enter the cost of 24 seed packets at 20 gold each and read back the result.
 
-> Check the secondary display. Open `com.miui.calculator`, read the current angle unit, switch it once, and tell me which unit is now visible. Then restore the original setting and read it back.
-
-On the test tablet the sequence was **DEG → RAD → DEG**. Each tap used an `observation_id` from a fresh view. If the control is an unlabeled icon, the assistant can request a screenshot with `screenshot: true, elements: false` and tap by pixel coordinates.
-
-[Watch the native calculator keypad (about nine seconds).](docs/images/calculator-live.gif) In this separate take, MCP read back `rad` at 3.6 seconds and the restored `deg` at 7.3 seconds. The angle-mode button is at the top left.
-
-**Does the physical display still accept input?** In a second dual-display take, the AgY model opened Calculator on the virtual display. An ADB tap on the main display marked a lap in Android Clock. After the recording, the paused stopwatch showed **12.73 s** for lap one and **14.18 s** total. The next angle-button input in this take was declined while the virtual display was changing. [Synchronized clip](docs/images/dual-lap.gif) · [Native lap result captured after the clip](docs/images/lap-receipt.png)
+Look for `480` on the virtual display. On the test tablet, Calculator's package is `com.miui.calculator`. Use the package installed on your device.
 
 ## Tools
 
@@ -125,4 +115,4 @@ You can close the viewer while the assistant keeps using its display. To release
 
 To run the source tests, use `python -m unittest discover -s tests -v` from the repository root.
 
-Trying a different device? [Share a compatibility report](https://github.com/ShuangjieGao/phone-use/issues) with the device model, Android version and app you tested. If phone-use helped you, you can star the repo or share the [native dual-display capture](docs/images/phone-use-card.png).
+Trying a different device? [Share a compatibility report](https://github.com/ShuangjieGao/phone-use/issues) with the device model, Android version and app you tested. If phone-use helped you, you can star the repo.
