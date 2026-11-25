@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 430" width="800" height="430" role="img" aria-labelledby="title desc">
+  <title id="title">Two displays on one Android tablet</title>
+  <desc id="desc">An illustration of a racing game on the tablet's physical display and a calculator on a separate Android virtual display controlled by the agent. A computer can optionally watch the virtual display.</desc>
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#454873"/>
+      <stop offset=".65" stop-color="#a36e82"/>
+      <stop offset="1" stop-color="#edaa86"/>
+    </linearGradient>
+    <clipPath id="game"><rect x="44" y="154" width="390" height="183" rx="8"/></clipPath>
+  </defs>
+  <rect width="800" height="430" rx="18" fill="#142226"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="30" y="55" font-size="35" font-weight="700" fill="#f2f7ec">Two displays on one tablet</text>
+    <text x="770" y="51" text-anchor="end" font-size="18" fill="#adbfbe">Illustration</text>
+    <path d="M30 78H770M471 103V372" fill="none" stroke="#456061" stroke-width="1.5"/>
+
+    <text x="31" y="120" font-size="24" font-weight="700" fill="#f4c989">Your main display</text>
+    <g>
+      <rect x="31" y="140" width="416" height="211" rx="17" fill="#10191d" stroke="#9ba6a2" stroke-width="2.5"/>
+      <g clip-path="url(#game)">
+        <rect x="44" y="154" width="390" height="183" fill="url(#sky)"/>
+        <circle cx="312" cy="202" r="27" fill="#ffd194"/>
+        <path fill="#786778" d="M44 236 108 197 129 208 154 195 203 227 233 202 258 221 306 187 342 216 376 193 434 224V252H44Z"/>
+        <path fill="#4c5964" d="m44 227 42-13 38 17 30-11 35 17 27-9 19 4 20-6 25 8 49-12 21 5 52-14 32 7v28H44Z"/>
+        <path fill="#43645d" d="M44 237Q141 228 235 239T434 236V337H44Z"/>
+        <path fill="#5c7d6a" d="m44 251 127-12-127 23Zm390-6-133-6 133 24ZM44 310l136-50-136 29Zm390-11-111-49 111 33Z"/>
+        <path fill="#e9cba1" d="M227 237h17l167 100H64Z"/>
+        <path fill="#344044" d="M228 237h15l151 100H82Z"/>
+        <path fill="#a7aa9b" d="M236 242h2l2 4h-3Zm-1 10h4l3 8h-8Zm-5 21h9l4 18h-18Z"/>
+        <path fill="#263d3f" d="m69 242 9-19 9 19Zm10 0 12-28 12 28Zm298 1 11-23 10 23Z"/>
+        <g transform="translate(197 292)">
+          <path fill="#232e32" d="M0 19 8 4h17l3-6h31l7 6h15l9 15-4 8H4Z"/>
+          <path fill="#f0a078" d="m6 16 7-10h13l8-7h21l7 7h15l7 10-3 4H9Z"/>
+          <path fill="#455a61" d="m30 7 6-6h17l6 6Z"/>
+          <path stroke="#fae8af" stroke-width="3" d="M11 15h14m39 0h13"/>
+        </g>
+        <path stroke="#e8dfce" stroke-width="2" fill="none" opacity=".78" d="M57 177v-9h13m338 0h13v9"/>
+      </g>
+      <circle cx="239" cy="147" r="2" fill="#67777a"/>
+    </g>
+
+    <text x="498" y="120" font-size="24" font-weight="700" fill="#9fe1cc">Agent's virtual display</text>
+    <rect x="558" y="140" width="148" height="216" rx="10" fill="#e8f3e9" stroke="#a1dfcb" stroke-width="3"/>
+    <path d="M570 148h18" stroke="#939f9b" stroke-width="2.5" stroke-linecap="round"/>
+    <text x="569" y="178" font-size="14" font-weight="700" fill="#41665d">Calculator</text>
+    <text x="691" y="207" text-anchor="end" font-size="29" font-weight="700" fill="#233d39">42</text>
+    <path d="M570 219h124" stroke="#b1c9bb" stroke-width="1.5"/>
+    <g stroke="#c1d4c7" fill="#d5e5d6">
+      <rect x="569" y="229" width="37" height="30" rx="6"/><rect x="613" y="229" width="37" height="30" rx="6"/><rect x="657" y="229" width="37" height="30" rx="6"/>
+      <rect x="569" y="268" width="37" height="30" rx="6"/><rect x="613" y="268" width="37" height="30" rx="6"/><rect x="657" y="268" width="37" height="30" rx="6"/>
+      <rect x="569" y="307" width="37" height="30" rx="6"/><rect x="613" y="307" width="37" height="30" rx="6"/><rect x="657" y="307" width="37" height="30" rx="6" fill="#b4d5c2"/>
+    </g>
+    <g font-size="17" text-anchor="middle" fill="#34564b">
+      <text x="587" y="251">7</text><text x="631" y="251">8</text><text x="675" y="251">9</text>
+      <text x="587" y="290">4</text><text x="631" y="290">5</text><text x="675" y="290">6</text>
+      <text x="587" y="329">1</text><text x="631" y="329">2</text><text x="675" y="329">=</text>
+    </g>
+
+    <path d="M30 378H770" stroke="#456061" stroke-width="1.5"/>
+    <text x="31" y="409" font-size="20" fill="#e5ede7">Your game stays on the tablet screen.</text>
+    <path d="M505 391h24v15h-24zM517 406v5m-6 0h12" fill="none" stroke="#9fe1cc" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <text x="539" y="408" font-size="18" fill="#c3d7d0">Optional read-only preview</text>
+  </g>
+</svg>

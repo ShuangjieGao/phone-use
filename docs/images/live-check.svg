@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 468" width="800" height="468" role="img" aria-labelledby="title desc">
+  <title id="title">Read-only MCP check on an Android tablet</title>
+  <desc id="desc">A transcript from phone-use 0.1.1. All seven tools were available. The display was not ready because the main screen's foreground could not be verified. The check stopped before reading a frame.</desc>
+  <rect width="800" height="468" rx="22" fill="#f4f6f2"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <text x="36" y="56" fill="#172e2b" font-size="34" font-weight="700">Checking a real tablet</text>
+    <text x="37" y="90" fill="#405651" font-size="20">Debian ARM64 · Read-only stdio check</text>
+  </g>
+  <rect x="28" y="112" width="744" height="229" rx="14" fill="#142c29"/>
+  <g font-family="ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace" font-size="23" xml:space="preserve">
+    <text x="52" y="155" fill="#b4eadc">$ python3 examples/check.py</text>
+    <text x="52" y="201" fill="#f3fbf9">Server<tspan x="178">phone-use 0.1.1</tspan></text>
+    <text x="52" y="237" fill="#f3fbf9">Tools<tspan x="178">7 available</tspan></text>
+    <text x="52" y="273" fill="#ffd7a0">Display<tspan x="178">not ready</tspan></text>
+    <text x="52" y="309" fill="#ffd7a0">Reason<tspan x="178">primary foreground unverified</tspan></text>
+  </g>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <text x="37" y="381" fill="#172e2b" font-size="23" font-weight="650">The MCP connection worked.</text>
+    <text x="37" y="414" fill="#405651" font-size="20">Open an app on the main screen and retry. When the display</text>
+    <text x="37" y="442" fill="#405651" font-size="20">is ready, the next step reads frame metadata.</text>
+  </g>
+</svg>

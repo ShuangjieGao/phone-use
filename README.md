@@ -1,8 +1,26 @@
 # phone-use
 
-让支持 MCP 的助手在 Android 平板上使用一块独立的虚拟屏。助手可以观察界面、点按钮、滑动和打开应用。人在主屏上继续使用其他应用，也可以从电脑只读观看助手正在操作的那块屏。
+[English](README.en.md) · [安装](#安装) · [计算器演示](#计算器演示) · [下载发行版](https://github.com/ShuangjieGao/phone-use/releases/latest)
 
-`phone-display` 在平板上创建副屏，`phone-use` 通过标准输入输出（stdio）向 MCP 客户端提供 7 个工具。可以单独接入自己的助手。项目最初用于小肥鱼，已在 Android 13、ARM64 Debian chroot 上实测。
+**给 AI 一块独立的安卓副屏，你继续使用主屏。** 我们在同一台平板上用 Moonlight 串流，同时让助手在虚拟屏上打开另一个应用。想看看助手点了什么？在电脑上打开这块副屏的只读预览即可。
+
+![双屏示意：一台平板的主屏显示游戏串流，AI 在独立虚拟屏使用计算器，电脑可以只读观看副屏。](docs/images/two-displays.svg)
+
+项目最初为小肥鱼开发，可以接入支持 **MCP stdio** 的其他助手。已在 **Android 13 + ARM64 Debian chroot** 上实测，需要已 root 的设备。
+
+| 使用时你关心什么 | phone-use 怎样处理 |
+| --- | --- |
+| 我正占着平板屏幕 | `phone-display` 创建独立的 Android 显示器。启动应用、点按和滑动都指定副屏编号。不同系统可能短暂转移输入焦点。 |
+| 助手怎样知道点哪里 | 默认通过中英文 OCR 获取文字和所在区域。按图标时可按需取截图；指定 `elements: false` 可以跳过 OCR。 |
+| 我怎么知道它点成功了 | 点按绑定最近一次观察。界面或目标已变化时会要求重看；助手通过下一帧里的文字或图像核实操作结果。 |
+
+## 计算器演示
+
+配置好 MCP 后，可让助手试一句：**「在副屏打开计算器，读出当前角度单位，切换一次，告诉我实际显示什么，然后恢复原来那一档。」** 选择有 `DEG` / `RAD` 切换键的科学计算器。不同设备上的应用包名和按钮位置可能不同。
+
+![操作流程示意：助手观察到 DEG，依据刚才的观察点击单位按钮，然后在新画面读到 RAD。](docs/images/observe-act.svg)
+
+实机测试中，助手先读到 `deg`，点按后从新帧读到 `rad`，再点一次读回 `deg`。点击回执说明输入已发出；**新画面里出现的单位**才是这个任务的验收结果。
 
 ## 运行环境
 
@@ -40,20 +58,25 @@ python3 -m venv /opt/xfy-phone-venv
   --package com.android.settings --width 900 --height 1600 --density 360
 ```
 
-保持这个进程运行。启动成功后终端输出含 `id`、`width` 和 `height` 的 JSON，随后模型即可操作。`--server-jar` 填从 Android 一侧看到的路径。要释放虚拟屏，可以在另一个 Debian 终端运行 `/opt/xfy-phone-venv/bin/phone-display stop`。
+保持这个进程运行。启动成功后终端输出含 `id`、`width` 和 `height` 的 JSON。`--server-jar` 填从 Android 一侧看到的路径。要释放虚拟屏，可以在另一个 Debian 终端运行 `/opt/xfy-phone-venv/bin/phone-display stop`。
 
-### 从 v0.1.0 升级
+### 验证副屏连接
 
-已用旧版 `xfy-phone-use` 的用户，请先下载本项目 v0.1.1 的 wheel，再在原来安装它的虚拟环境中依次执行以下命令。两个发行包使用相同的 Python 模块，先卸载旧包再装新包可以避免文件互相覆盖。旧的 `xfy-phone-use` 和 `xfy-phone-display` 命令在新版中仍可使用，原有 MCP 客户端配置可继续工作。
+在平板的第二个 Debian 终端里，从本仓库根目录运行下面的命令。通过 wheel 安装的用户也可以单独下载[检查脚本](examples/check.py)，把命令里的 `examples/check.py` 换成实际保存路径。
 
 ```sh
-/opt/xfy-phone-venv/bin/python -m pip uninstall -y xfy-phone-use
-/opt/xfy-phone-venv/bin/python -m pip install './phone_use-0.1.1-py3-none-any.whl[vision]'
+python3 examples/check.py --server /opt/xfy-phone-venv/bin/phone-use
 ```
+
+脚本作为客户端启动 MCP 服务，依次核对握手、7 个工具和副屏状态；副屏就绪后再取一帧验证。它只打印检查结果，不读取 OCR 文字或返回截图。
+
+![v0.1.1 平板连接检查实录：协议握手和七项工具检查通过，主屏前台未能核实，检查停在副屏状态。](docs/images/live-check.svg)
+
+这张图演示了一个实际遇到的情况：**MCP 连通了，副屏还不能操作**。脚本显示 `primary foreground unverified` 时，让主屏停在一个前台清晰的应用，再运行同一条命令。这样可以先定位问题，再让模型尝试操作。
 
 ## 连接 MCP 客户端
 
-以下示例适用于在**同一平板 chroot 内**启动 stdio 子进程、支持 `mcpServers` 配置的客户端。其他客户端使用同一个可执行文件；若更改 `XFY_PHONE_RUNTIME`，请让副屏运行时和 MCP 使用同一目录。默认运行时目录和 Unix 套接字仅供创建它们的用户访问。
+以下示例适用于在**同一平板 chroot 内**启动 stdio 子进程、支持 `mcpServers` 配置的客户端。用创建副屏的同一个系统用户启动客户端，确保它可以访问运行目录和 Unix 套接字。如果自定义了 `XFY_PHONE_RUNTIME`，请给副屏进程和 MCP 客户端配置相同的值。
 
 ```json
 {
@@ -66,7 +89,9 @@ python3 -m venv /opt/xfy-phone-venv
 }
 ```
 
-第一次可以让助手执行「查看副屏状态，告诉我屏幕尺寸」。确认 `phone_status` 返回 `ready: true` 后，再试「打开计算器，看看角度单位，切换一次并读回结果」。点击与滑动使用刚刚观察到的画面编号；每次操作后重新观察即可确认效果。
+第一次可以问助手「查看副屏状态，告诉我屏幕尺寸」。`phone_status` 返回 `ready: true` 后就可以试[计算器演示](#计算器演示)。
+
+### 工具一览
 
 | MCP 工具 | 用途 |
 | --- | --- |
@@ -86,7 +111,16 @@ python3 -m venv /opt/xfy-phone-venv
 scrcpy --display-id=7 --no-control --no-audio --no-power-on
 ```
 
-关闭这个只读窗口后，平板上的副屏继续运行。部分 Android 版本会在操作副屏时短暂转移全局输入焦点，应用对副屏的支持也可能不同。若状态显示 `Primary foreground could not be verified`，先回到可辨认的主屏应用，再执行 `phone_status`。若动作报告画面已变，重新 `phone_observe` 后再定位。
+关闭这个只读窗口后，平板上的副屏继续运行。若状态显示 `Primary foreground could not be verified`，先回到可辨认的主屏应用，再执行 `phone_status`。若动作报告画面已变，重新 `phone_observe` 后再定位。
+
+### 从 v0.1.0 升级
+
+已用旧版 `xfy-phone-use` 的用户，请先下载本项目 v0.1.1 的 wheel，再在原来的虚拟环境中执行以下命令。两个发行包使用相同的 Python 模块，先卸载旧包再装新包可以避免文件互相覆盖。旧命令 `xfy-phone-use` 和 `xfy-phone-display` 仍可使用。
+
+```sh
+/opt/xfy-phone-venv/bin/python -m pip uninstall -y xfy-phone-use
+/opt/xfy-phone-venv/bin/python -m pip install './phone_use-0.1.1-py3-none-any.whl[vision]'
+```
 
 ## 开发与许可
 
@@ -95,3 +129,5 @@ python -m unittest discover -s tests -v
 ```
 
 本项目按 [GNU AGPL-3.0-only](LICENSE) 开源。scrcpy、FFmpeg、Tesseract 和 Pillow 独立安装，适用各自的上游许可证。
+
+如果你也在手机或平板上跑通了，欢迎在 [Issues](https://github.com/ShuangjieGao/phone-use/issues) 分享设备型号、Android 版本和哪个应用能在副屏上运行。这些记录可以帮助下一个人判断自己的设备是否合适。觉得这个工具有用，可以点 **Star** 收藏，或用[这张介绍图](docs/images/phone-use-card.png)分享项目。
