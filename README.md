@@ -19,6 +19,8 @@
 
 每段都是同一台设备的主屏与副屏同步采集，保留两块屏的完整画面和连续时间线。
 
+**B 站副屏观看例子。** 设备侧用 MCP 搜索 UP 主「Jerry的杰瑞」并进入个人空间。小肥鱼从两条投稿中选了《人工智能视觉_第三轮预赛》，设备侧点开后连续播放。模型分别看了播放器进度约 **01:04** 和 **02:09** 的两帧：前一帧能看到蓝桌布旁的橙衣参赛者，后一帧能辨认出场边显示器上的大号数字 **5**。这次描述来自画面取样，未传输音轨。要在动态搜索页输入中文，请先点搜索栏，用 `phone_observe(editor=true)` 绑定编辑器，再调用 `phone_type`。
+
 | 使用时你关心什么 | phone-use 怎样处理 |
 | --- | --- |
 | 我正占着平板屏幕 | `phone-display` 创建独立的 Android 显示器。启动应用、点按和滑动都指定副屏编号。不同系统可能短暂转移输入焦点。 |
@@ -112,7 +114,7 @@ adb install -r android-text-input/phone-use-text-input.apk
 
 | MCP 工具 | 用途 |
 | --- | --- |
-| `phone_status` | 查看副屏是否就绪、尺寸和可识别的前台活动 |
+| `phone_status` | 查看副屏是否就绪、当前逻辑尺寸、旋转方向和可识别的前台活动 |
 | `phone_launch` | 根据 Android 包名在副屏启动应用 |
 | `phone_observe` | 通过 OCR 返回文字区域和 `observation_id`，可选 `screenshot: true` 取图或 `elements: false` 跳过 OCR |
 | `phone_tap` | 按文字区域 ID 或像素坐标点按 |
@@ -128,7 +130,7 @@ adb install -r android-text-input/phone-use-text-input.apk
 scrcpy --display-id=7 --no-control --no-audio --no-power-on
 ```
 
-关闭这个只读窗口后，平板上的副屏继续运行。若状态显示 `Primary foreground could not be verified`，先回到可辨认的主屏应用，再执行 `phone_status`。若动作报告画面已变，重新 `phone_observe` 后再定位。
+关闭这个只读窗口后，平板上的副屏继续运行。若状态显示 `Primary foreground could not be verified`，先回到可辨认的主屏应用，再执行 `phone_status`。如果播放器从竖屏转为横屏，重新 `phone_observe`，用新画面的坐标操作。运行时需要校正旋转后的截图比例时会用到安装步骤中的 `vision` 依赖。
 
 ### 从旧包名迁移
 

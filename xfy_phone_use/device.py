@@ -38,6 +38,8 @@ class Screen:
     socket_inode: int
     primary: str
     activity: str
+    rotation: int = 0
+    configured_size: tuple = ()
 
 
 def _android(*args):
@@ -71,9 +73,25 @@ def _frame(path, screen):
     except OSError as exc:
         raise PhoneError('Secondary frame socket unavailable') from exc
     if (len(png) != size or len(png) < 33 or png[:8] != b'\x89PNG\r\n\x1a\n'
-            or png[12:16] != b'IHDR' or struct.unpack('>II', png[16:24]) != (screen.width, screen.height)
+            or png[12:16] != b'IHDR'
             or png[-8:-4] != b'IEND'):
-        raise PhoneError('Invalid PNG or secondary display dimensions changed')
+        raise PhoneError('Invalid secondary frame')
+    pixels = struct.unpack('>II', png[16:24])
+    logical = (screen.width, screen.height)
+    if pixels != logical:
+        # The runtime uses FFmpeg image2pipe: after a quarter turn it scales the
+        # upright H.264 picture to the first output size, without padding or cropping.
+        if not (screen.rotation % 2 and pixels == screen.configured_size and pixels[::-1] == logical):
+            raise PhoneError('Secondary frame does not match the Android display geometry')
+        try:
+            from PIL import Image
+            with Image.open(io.BytesIO(png)) as source:
+                restored = source.resize(logical, Image.Resampling.BILINEAR)
+                buf = io.BytesIO()
+                restored.save(buf, 'PNG', compress_level=1)
+            png = buf.getvalue()
+        except (ImportError, OSError, ValueError) as exc:
+            raise PhoneError('Cannot align the rotated frame; install the vision extra and observe again') from exc
     return seq, captured_ms, png
 
 
@@ -106,8 +124,8 @@ def _ocr(png, width, height):
     return elements, None
 
 
-def _same_tap_target(before, after, bounds):
-    """Permit an unrelated animation only when the target and page layout still match."""
+def _same_page(before, after, tap_bounds=None):
+    """Detect a scene change; for coordinate taps also check the target itself."""
     try:
         from PIL import Image, ImageChops, ImageFilter
         a = Image.open(io.BytesIO(before)).convert('RGB')
@@ -117,11 +135,10 @@ def _same_tap_target(before, after, bounds):
         difference = ImageChops.difference(a, b)
         channels = difference.split()
         delta = ImageChops.lighter(channels[0], ImageChops.lighter(channels[1], channels[2]))
-        # Check both the tap neighbourhood and the overall page. Some animation
-        # outside the tap is fine; a scene transition or changed label is not.
-        patch = delta.crop(bounds).filter(ImageFilter.BoxBlur(1))
-        if sum(patch.histogram()[24:]) > 8:
-            return False
+        if tap_bounds is not None:
+            patch = delta.crop(tap_bounds).filter(ImageFilter.BoxBlur(1))
+            if sum(patch.histogram()[24:]) > 8:
+                return False
         coarse = delta.resize((18,32), Image.Resampling.BOX)
         return sum(coarse.histogram()[32:]) <= 12
     except (ImportError, OSError, ValueError):
@@ -158,6 +175,7 @@ class PhoneDevice:
         self.observation = None
         self.primary = None
         self.input_frame = None
+        self.geometry = None
         self.native_text = os.environ.get('PHONE_USE_TEXT_HELPER') == '1'
 
     def _screen(self):
@@ -176,6 +194,23 @@ class PhoneDevice:
         entry = re.search(rf'^\s*Display id {display}:([^\n]+)', displays, re.M)
         if not entry or 'scrcpy' not in entry[1].lower():
             raise PhoneError('Selected display is no longer a scrcpy display')
+        size = re.search(r'\breal\s+(\d+)\s*x\s*(\d+)\b', entry[1])
+        orientation = re.search(r'\brotation\s+([0-3])\b', entry[1])
+        if not size or not orientation:
+            raise PhoneError('Android did not report the secondary display geometry')
+        configured = (width, height)
+        width, height = map(int, size.groups())
+        rotation = int(orientation[1])
+        if (width, height) != (configured[::-1] if rotation % 2 else configured):
+            raise PhoneError('Unexpected secondary display resize; create a new display')
+        geometry = (display, inode, width, height, rotation)
+        if self.geometry != geometry:
+            # Do not reuse the last buffered pre-rotation frame, including for
+            # half turns where the logical width and height do not change.
+            if self.geometry is not None or rotation:
+                self.input_frame = (inode, time.time_ns() // 1_000_000)
+                self.observation = None
+            self.geometry = geometry
         windows = _windows(_android('dumpsys', 'window', 'displays'))
         primary = foreground_activity(*windows.get(0, ('', '')), primary=True)
         if not primary:
@@ -186,7 +221,7 @@ class PhoneDevice:
         if display not in windows:
             raise PhoneError('Secondary window disappeared')
         activity = foreground_activity(*windows[display], primary=False)
-        return Screen(display, width, height, inode, primary, activity)
+        return Screen(display, width, height, inode, primary, activity, rotation, configured)
 
     def status(self):
         try:
@@ -194,7 +229,8 @@ class PhoneDevice:
         except PhoneError as exc:
             return {'ready': False, 'reason': str(exc)}
         return {'ready': True, 'display_id': screen.display, 'width': screen.width,
-                'height': screen.height, 'activity': screen.activity, 'observation_source': 'ocr'}
+                'height': screen.height, 'rotation': screen.rotation, 'activity': screen.activity,
+                'observation_source': 'ocr'}
 
     def _capture(self, screen):
         seq, timestamp, png = _frame(self.runtime / 'screen.sock', screen)
@@ -223,7 +259,8 @@ class PhoneDevice:
         observation_id = secrets.token_hex(12)
         self.observation = (observation_id, screen, png, found, binding)
         result = {'observation_id': observation_id, 'display_id': screen.display,
-                  'width': screen.width, 'height': screen.height, 'activity': screen.activity,
+                  'width': screen.width, 'height': screen.height, 'rotation': screen.rotation,
+                  'activity': screen.activity,
                   'source': 'ocr' if elements else 'frame', 'elements': found,
                   'frame_sequence': seq, 'captured_ms': timestamp}
         if warning:
@@ -321,10 +358,18 @@ class PhoneDevice:
         _, _, png = self._capture(screen)
         self.observation = None
         if png != old_png:
-            same_tap = action == 'tap' and _same_tap_target(old_png, png, target_bounds)
-            same_editor = (action == 'text' and self.native_text and binding and binding['status'] == 'ready'
-                           and _same_except_caret(old_png, png, binding.get('bounds')))
-            if not (same_tap or same_editor):
+            if action == 'tap':
+                unchanged = _same_page(old_png, png, target_bounds)
+            elif action == 'text' and self.native_text and binding and binding['status'] == 'ready':
+                # The input connection validates the observed editor session, text and
+                # selection again at commit time. A coordinate-based target cannot do this.
+                if binding.get('transport') == 'input_connection':
+                    unchanged = _same_page(old_png, png)
+                else:
+                    unchanged = _same_except_caret(old_png, png, binding.get('bounds'))
+            else:
+                unchanged = False
+            if not unchanged:
                 raise PhoneError('Screen changed; observe again before acting')
         if action == 'text' and self.native_text:
             return self._insert(screen, png, binding, text)
@@ -365,4 +410,5 @@ class PhoneDevice:
     def close(self):
         self.observation = None
         self.input_frame = None
+        self.geometry = None
         self.primary = None

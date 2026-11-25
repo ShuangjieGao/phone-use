@@ -1,6 +1,7 @@
 import struct
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -41,6 +42,20 @@ class PhoneDeviceTests(unittest.TestCase):
         with self.assertRaisesRegex(device.PhoneError, 'Screen changed'):
             self.phone.act('key', observation['observation_id'], key='back')
         self.call.assert_not_called()
+
+    def test_observed_taps_use_logical_landscape_axes_and_expire_on_rotation(self):
+        landscape = replace(self.screen, width=240, height=120, rotation=1, configured_size=(120,240))
+        self.screen_call.return_value = landscape
+        view = self.phone.observe(elements=False)
+        self.assertEqual((view['width'], view['height'], view['rotation']), (240, 120, 1))
+        self.phone.act('tap', view['observation_id'], x=220, y=12)
+        self.call.assert_called_once_with('input', '-d','8','tap','220','12')
+        self.phone.close()
+        view = self.phone.observe(elements=False)
+        self.screen_call.return_value = replace(landscape, rotation=3)
+        with self.assertRaisesRegex(device.PhoneError, 'Foreground or display changed'):
+            self.phone.act('tap', view['observation_id'], x=220, y=12)
+        self.assertEqual(self.call.call_count, 1)
 
     def test_frame_only_observation_skips_ocr(self):
         with patch.object(device, '_ocr') as ocr:
@@ -115,6 +130,48 @@ class PhoneDeviceTests(unittest.TestCase):
                 self.assertEqual(native.call_count, 2)
         self.call.assert_not_called()
 
+    def test_bound_input_connection_ignores_small_animations_but_rechecks_the_original_token(self):
+        self.phone.native_text = True
+        binding = {'status': 'ready', 'transport': 'input_connection', 'token': 'observed-editor'}
+        native = self.start_patch('request_editor')
+        for insertion in ({'status': 'verified'}, {'status': 'not_applied', 'reason': 'target_changed'}):
+            with self.subTest(reply=insertion), patch.object(device, '_same_page', return_value=True):
+                self.phone.close()
+                native.reset_mock()
+                native.side_effect = [binding, insertion]
+                self.capture.return_value = (1, 1000, b'page before animation')
+                view = self.phone.observe(elements=False, editor=True)
+                self.capture.return_value = (2, 1001, b'page after animation')
+                if insertion['status'] == 'verified':
+                    self.assertTrue(self.phone.act('text', view['observation_id'], text='测试')['readback'])
+                else:
+                    with self.assertRaisesRegex(device.TextInputError, 'target_changed'):
+                        self.phone.act('text', view['observation_id'], text='测试')
+                native.assert_called_with(self.screen, 'insert', token='observed-editor', text='测试',
+                                          transport='input_connection')
+                self.assertEqual(native.call_count, 2)
+                with self.assertRaisesRegex(device.PhoneError, 'expired'):
+                    self.phone.act('text', view['observation_id'], text='测试')
+        self.call.assert_not_called()
+
+    def test_bound_input_connection_rejects_scene_or_foreground_change_before_dispatch(self):
+        self.phone.native_text = True
+        native = self.start_patch('request_editor', return_value={
+            'status': 'ready', 'transport': 'input_connection', 'token': 'observed-editor'})
+        for changed_window in (False, True):
+            with self.subTest(changed_window=changed_window), patch.object(device, '_same_page', return_value=False):
+                self.screen_call.return_value = self.screen
+                self.capture.return_value = (1, 1000, b'old frame')
+                view = self.phone.observe(elements=False, editor=True)
+                native.reset_mock()
+                if changed_window:
+                    self.screen_call.return_value = device.Screen(8, 160, 120, 44, 'moon/Game', 'other/.UI')
+                self.capture.return_value = (2, 1001, b'new scene')
+                with self.assertRaisesRegex(device.PhoneError, 'Foreground|Screen changed'):
+                    self.phone.act('text', view['observation_id'], text='测试')
+                native.assert_not_called()
+        self.call.assert_not_called()
+
     def test_observing_password_field_allows_other_actions_but_never_types(self):
         self.phone.native_text = True
         native = self.start_patch('request_editor', return_value={'status': 'not_applied', 'reason':'password_field'})
@@ -158,6 +215,33 @@ class PhoneDeviceTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+    def test_ffmpeg_quarter_turn_frame_is_resized_upright_or_rejected(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest('Install the vision extra to align legacy rotated PNG frames')
+        # A marker in the right half of an upright (but squashed) encoded PNG
+        # must still be in the right half, never in the top/bottom as a transpose would do.
+        im = Image.new('RGB', (30, 60), 'navy')
+        im.paste('red', (15, 0, 30, 30))
+        buf = device.io.BytesIO()
+        im.save(buf, 'PNG')
+        png = buf.getvalue()
+        screen = device.Screen(8, 60, 30, 1, 'main/Game', 'view/Video', 1, (30,60))
+        payload = struct.pack('>IQQ',len(png),7,5000) + png
+        def read(s):
+            with patch.object(device.socket, 'AF_UNIX', 1, create=True), patch.object(device.socket, 'socket') as factory:
+                factory.return_value.__enter__.return_value.makefile.return_value = device.io.BytesIO(payload)
+                return device._frame(Path('screen.sock'),s)
+        seq,stamp,fr = read(screen)
+        out = Image.open(device.io.BytesIO(fr))
+        self.assertEqual((seq,stamp,out.size),(7,5000,(60,30)))
+        self.assertEqual(out.getpixel((50,4)), (255,0,0))
+        self.assertEqual(out.getpixel((4,4)), (0,0,128))
+        self.assertEqual(out.getpixel((50,26)), (0,0,128))
+        for unsafe in [replace(screen,rotation=0), replace(screen,configured_size=(15,30)), replace(screen,width=59)]:
+            with self.subTest(screen=unsafe), self.assertRaisesRegex(device.PhoneError, 'geometry'):
+                read(unsafe)
     def test_caret_may_change_but_screen_elsewhere_must_match(self):
         try:
             from PIL import Image, ImageDraw
@@ -190,9 +274,15 @@ class TransportTests(unittest.TestCase):
         before=encode(image)
         painter=ImageDraw.Draw(image)
         painter.rectangle((160,240,170,250),fill='red')
-        self.assertTrue(device._same_tap_target(before,encode(image),(24,24,120,120)))
+        self.assertTrue(device._same_page(before,encode(image),(24,24,120,120)))
+        self.assertTrue(device._same_page(before,encode(image)))
+        painter.rectangle((3,5,10,12),fill='blue')
+        self.assertFalse(device._same_except_caret(before,encode(image),None))
+        self.assertTrue(device._same_page(before,encode(image)))
         painter.rectangle((70,60,79,66),fill='black')
-        self.assertFalse(device._same_tap_target(before,encode(image),(24,24,120,120)))
+        self.assertFalse(device._same_page(before,encode(image),(24,24,120,120)))
+        painter.rectangle((0,0,199,149),fill='black')
+        self.assertFalse(device._same_page(before,encode(image)))
     def test_framed_secondary_protocol_and_pixels(self):
         fake_unix = patch.object(device.socket, 'AF_UNIX', 1, create=True)
         fake_unix.start()
@@ -220,6 +310,31 @@ class TransportTests(unittest.TestCase):
             self.assertFalse(phone.status()['ready'])
             android.assert_not_called()
 
+    def test_runtime_geometry_tracks_android_rotation_and_discards_pre_rotation_observations(self):
+        dump = ('Display: mDisplayId=0\n  mCurrentFocus=Window{aa u0 org.game/Game}\n'
+                'Display: mDisplayId=8\n  mCurrentFocus=Window{bb u0 org.video/Player}\n')
+        with tempfile.TemporaryDirectory() as root, patch.object(Path, 'is_socket', return_value=True), \
+                patch.object(device, '_android') as android:
+            phone = device.PhoneDevice()
+            phone.runtime = Path(root)
+            (phone.runtime / 'display.json').write_text('{"id":8,"width":120,"height":240}')
+            (phone.runtime / 'screen.sock').touch()
+            def status(info):
+                android.side_effect = ['Display id 8: DisplayInfo{"scrcpy", ' + info + '}', dump]
+                return phone.status()
+            self.assertTrue(status('real 120 x 240, rotation 0')['ready'])
+            phone.observation = 'old coordinates'
+            landscape = status('real 240 x 120, rotation 1')
+            self.assertEqual((landscape['width'],landscape['height'],landscape['rotation']), (240,120,1))
+            self.assertIsNone(phone.observation)
+            self.assertIsNotNone(phone.input_frame)
+            # Even a full turn back to the original size must not revive old coordinates.
+            phone.observation = 'old landscape'
+            self.assertTrue(status('real 240 x 120, rotation 3')['ready'])
+            self.assertIsNone(phone.observation)
+            self.assertFalse(status('real 242 x 120, rotation 1')['ready'])
+            self.assertFalse(status('real 120 x 240')['ready'])
+
     def test_windows_keep_displays_separate(self):
         dump = ('Display: mDisplayId=0\n  mCurrentFocus=Window{aaa u0 moon/Game}\n'
                 '  Display: mDisplayId=8\n  mFocusedApp=ActivityRecord{bbb u0 com.qq/.Main t22}\n')
@@ -241,7 +356,7 @@ class TransportTests(unittest.TestCase):
             (phone.runtime / 'display.json').write_text('{"id":8,"width":160,"height":120}')
             (phone.runtime / 'screen.sock').touch()
             def status(focus, app):
-                android.side_effect = ['Display id 8: scrcpy, real 160 x 120', dump(focus, app)]
+                android.side_effect = ['Display id 8: scrcpy, real 160 x 120, rotation 0', dump(focus, app)]
                 return phone.status()
 
             first = status(f'Window{{a u0 {expanded}}}', f'ActivityRecord{{b u0 {primary} t23}}')

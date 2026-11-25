@@ -19,6 +19,8 @@ This 34-second recording starts with the Chinese draft already in the editor. Th
 
 Each example shows the full, synchronized displays of the same tablet running the Android edition of the game. The recordings play continuously at their original speed.
 
+**Watching a video on Bilibili.** In a device test, the MCP operator searched for the uploader `Jerry的杰瑞` and opened their profile. Xiaofeiyu chose *人工智能视觉_第三轮预赛* from two uploads, and the operator tapped it to play. The model inspected two frames sampled about 65 seconds apart: people in orange beside a blue-covered table at **01:04**, and a large **5** on the event monitor at **02:09**. The observations came from the sampled frames; no audio was supplied. To type on an animated search page, tap the search field, bind it with `phone_observe(editor=true)`, then call `phone_type`.
+
 ## Quick start
 
 You need a rooted Android device with a Debian chroot that can access Android's PID 1, mount namespace and abstract Unix sockets. The chroot needs Python 3.9+, permission to run `nsenter`, and FFmpeg with `-fps_mode` support. Use **scrcpy-server 4.1** with phone-use.
@@ -106,7 +108,7 @@ Look for `480` on the virtual display. On the test tablet, Calculator's package 
 
 | Tool | What it does |
 | --- | --- |
-| `phone_status` | Returns readiness, screen dimensions and the foreground activity when available. |
+| `phone_status` | Returns readiness, current logical dimensions, rotation and the foreground activity when available. |
 | `phone_launch` | Opens an installed Android app by package name on the secondary display. |
 | `phone_observe` | Returns an observation ID and OCR text regions. Screenshots are opt-in. |
 | `phone_tap` | Taps a text region by ID or a point in the observed screen's pixel coordinates. |
@@ -128,6 +130,7 @@ You can close the viewer while the assistant keeps using its display. To release
 | --- | --- |
 | `Primary foreground could not be verified` | Bring a recognizable app to the foreground on the main display, then check `phone_status` again. |
 | An input reports that the view has changed | Call `phone_observe` again and select the target from the new view. |
+| The video player switches to landscape | Observe again and use coordinates from the new view. The `vision` extra from the installation steps is needed when the captured image must be resized to match the rotated display. |
 | An app launches on the wrong display or changes input focus | Start with Settings to check your setup. Secondary-display support varies by app and Android build, and system input focus can shift briefly. |
 
 To run the source tests, use `python -m unittest discover -s tests -v` from the repository root.
