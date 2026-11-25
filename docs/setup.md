@@ -1,0 +1,124 @@
+# 安装与使用
+
+[项目首页](../README.md) · [English](setup.en.md)
+
+## 运行环境
+
+- 已获取 root 的 Android 设备，配有 Debian chroot。chroot 需要看得到 Android 的 PID 1、挂载命名空间和抽象 Unix 套接字。操作端需要有权限运行 `nsenter`。
+- Python 3.9 或更高版本、`util-linux`、FFmpeg（支持 `-fps_mode`）和 **scrcpy-server 4.1**。
+- 用 OCR 定位文字时，安装 Tesseract 及简体中文、英文语言包。Pillow 可增强对局部动画的处理，使点击前能核对按钮所在区域。
+
+## 安装
+
+**1. 在电脑上放置 scrcpy 服务端。** 下载官方 `scrcpy-server-v4.1`，校验 SHA-256 后放到 Android。下面的 PowerShell 命令假设电脑已经能用 `adb devices` 看到目标平板。如果连接了多台设备，给 `adb` 加 `-s <目标序列号>`。[scrcpy 4.1 官方发行页](https://github.com/Genymobile/scrcpy/releases/tag/v4.1)
+
+```powershell
+curl.exe -fL -o scrcpy-server-v4.1 https://github.com/Genymobile/scrcpy/releases/download/v4.1/scrcpy-server-v4.1
+$expected = 'deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae'
+if ((Get-FileHash .\scrcpy-server-v4.1 -Algorithm SHA256).Hash -ne $expected) { throw 'scrcpy-server checksum mismatch' }
+adb push scrcpy-server-v4.1 /data/local/tmp/scrcpy-server-v4.1.jar
+```
+
+**2. 在平板的 Debian chroot 内从源码安装。** 下面的命令以 root 执行。已有源码目录的用户可以直接进入该目录。
+
+```sh
+apt-get update
+apt-get install -y git python3-venv util-linux ffmpeg tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
+git clone https://github.com/ShuangjieGao/phone-use.git
+cd phone-use
+python3 -m venv /opt/xfy-phone-venv
+/opt/xfy-phone-venv/bin/python -m pip install '.[vision]'
+```
+
+**3. 在平板上启动副屏。** 示例用 `com.android.settings` 打开系统设置。也可以将包名换为设备上已安装、且能在副屏运行的应用。先把主屏切到另一个应用，保持主屏前台可识别。
+
+```sh
+/opt/xfy-phone-venv/bin/phone-display run \
+  --server-jar /data/local/tmp/scrcpy-server-v4.1.jar \
+  --package com.android.settings --width 900 --height 1600 --density 360
+```
+
+保持这个进程运行。启动成功后终端输出含 `id`、`width` 和 `height` 的 JSON。`--server-jar` 填从 Android 一侧看到的路径。要释放虚拟屏，可以在另一个 Debian 终端运行 `/opt/xfy-phone-venv/bin/phone-display stop`。
+
+### 验证副屏连接
+
+在平板的第二个 Debian 终端里，从本仓库根目录运行下面的命令。
+
+```sh
+python3 examples/check.py --server /opt/xfy-phone-venv/bin/phone-use
+```
+
+看到 `Display  ready` 和 `Frame    received` 就可以连接助手。如果提示 `primary foreground unverified`，请解锁设备，让主屏停在一个应用里，再运行同一条命令。
+
+## 连接 MCP 客户端
+
+以下示例适用于在**同一平板 chroot 内**启动 stdio 子进程、支持 `mcpServers` 配置的客户端。用创建副屏的同一个系统用户启动客户端，确保它可以访问运行目录和 Unix 套接字。如果自定义了 `XFY_PHONE_RUNTIME`，请给副屏进程和 MCP 客户端配置相同的值。
+
+```json
+{
+  "mcpServers": {
+    "phone-use": {
+      "command": "/opt/xfy-phone-venv/bin/phone-use",
+      "env": { "XFY_PHONE_RUNTIME": "/run/xfy-phone-use" }
+    }
+  }
+}
+```
+
+第一次可以问助手「查看副屏状态，告诉我屏幕尺寸」。`phone_status` 返回 `ready: true` 后，再试「在副屏打开计算器，算 24 × 20，然后读出屏幕上的结果」。
+
+### 输入中文
+
+在 Android 11 或更高版本上，可以安装本项目的[原生编辑辅助程序](../android-text-input/README.md)。在有 JDK、Android SDK Platform 35 和 Build Tools 的 Linux 构建机上，从仓库根目录运行以下命令。Windows 用户也可以在 WSL 构建，再用已连接平板的 ADB 安装生成的 APK。
+
+```sh
+# ANDROID_HOME 指向已安装的 Android SDK
+sh android-text-input/build-apk.sh
+adb install -r android-text-input/phone-use-text-input.apk
+```
+
+在上方 MCP 配置的 `env` 中添加 `"PHONE_USE_TEXT_HELPER": "1"`，重启 MCP 客户端连接。Android 13 及以上的部分应用（包括实测的微信）不会在副屏提供可编辑的无障碍节点。这种情况下，可在安卓的「无障碍 → 已安装或已下载的服务」中手动开启 **phone-use local text input**。这是系统级授权；辅助程序使用当前编辑器的输入连接，不需要更换默认键盘或使用剪贴板。可随时从同一处关闭。
+
+先点中副屏输入框，调用 `phone_observe(editor=true, elements=false)`，再把这次的 `observation_id` 交给 `phone_type`。工具返回 `readback: true` 表示已从同一个编辑框读回预期的文字。收到 `unconfirmed` 时先检查现有文字，再决定是否重试。聊天里的「发送」是单独的一次点按。
+
+### 连续观察同一页面
+
+在等待页面加载或核对操作结果时，可以把上一次 `observation_id` 作为 `since` 传给 `phone_observe`。如果返回 `unchanged: true`，沿用上次已经收到的画面或文字区域，下一次点按使用**这次的新编号**。有新画面时会正常返回所请求的内容。只要确认输入框时，指定 `editor=true, elements=false` 可以跳过文字识别；需要识字时，相同画面可以复用上次成功的 OCR 结果。
+
+### 工具一览
+
+| MCP 工具 | 用途 |
+| --- | --- |
+| `phone_status` | 查看副屏是否就绪、当前逻辑尺寸、旋转方向和可识别的前台活动 |
+| `phone_launch` | 根据 Android 包名在副屏启动应用 |
+| `phone_observe` | 通过 OCR 返回文字区域和 `observation_id`，可选 `screenshot: true` 取图或 `elements: false` 跳过 OCR |
+| `phone_tap` | 按文字区域 ID 或像素坐标点按 |
+| `phone_swipe` | 在观察到的画面上滑动 |
+| `phone_type` | 向聚焦的输入框写入单行文本。原生编辑辅助支持中文及读回确认；基础键盘模式支持可打印 ASCII |
+| `phone_key` | 发送 `back`、`enter` 或 `del` |
+
+### 在 B 站看视频
+
+可以从一个能核对结果的任务开始：「去 B 站找这个 UP 主，选一条投稿看一分钟，告诉我片名和两个时间点看到的东西。」在「Jerry的杰瑞」的《人工智能视觉_第三轮预赛》实测里，两次取样对应播放器的 **01:04** 和 **02:09**：先看到蓝桌布旁的橙衣参赛者，随后看到场边屏幕上的大号数字 **5**。模型接收的是这两张画面，没有音轨。
+
+## 从电脑看同一块屏
+
+在平板 Debian 用 `cat /run/xfy-phone-use/display.json` 查本次的 `id`。假设返回 `7`，在装有 scrcpy 4.1 的电脑上执行：
+
+```sh
+scrcpy --display-id=7 --no-control --no-audio --no-power-on
+```
+
+关闭这个只读窗口后，平板上的副屏继续运行。若状态显示 `Primary foreground could not be verified`，先回到可辨认的主屏应用，再执行 `phone_status`。如果播放器从竖屏转为横屏，重新 `phone_observe`，用新画面的坐标操作。运行时需要校正旋转后的截图比例时会用到安装步骤中的 `vision` 依赖。
+
+### 从旧包名迁移
+
+如果虚拟环境中装过旧包名 `xfy-phone-use`，请先在该环境里运行 `python -m pip uninstall xfy-phone-use`，然后从本仓库执行 `python -m pip install '.[vision]'`。新旧包名共用 Python 导入路径。
+
+## 开发与许可
+
+```sh
+python -m unittest discover -s tests -v
+```
+
+本项目按 [GNU AGPL-3.0-only](../LICENSE) 开源。scrcpy、FFmpeg、Tesseract 和 Pillow 独立安装，适用各自的上游许可证。

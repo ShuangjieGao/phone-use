@@ -52,6 +52,14 @@ class ProtocolTests(unittest.TestCase):
         self.device.observe.assert_called_once_with(elements=False)
         self.assertEqual(json.loads(response["content"][0]["text"])["source"], "frame")
 
+    def test_since_passes_through_and_an_unchanged_result_has_only_metadata(self):
+        self.device.observe.return_value = {"observation_id": "b", "unchanged": True}
+        response = self.call("phone_observe", screenshot=True, since="a")
+        self.device.observe.assert_called_once_with(screenshot=True, since="a")
+        self.assertEqual(len(response["content"]), 1)
+        self.assertEqual(json.loads(response["content"][0]["text"]),
+                         {"observation_id": "b", "unchanged": True})
+
     def test_sensitive_bound_editor_is_not_returned_and_unicode_is_forwarded(self):
         self.device.observe.return_value = {"observation_id": "a", "editor": {"status": "ready"}}
         self.call("phone_observe", elements=False, editor=True)

@@ -1,6 +1,8 @@
 """Operate an existing Android secondary display through its scrcpy FRAME socket."""
 
 import csv
+from copy import deepcopy
+import hashlib
 import io
 import json
 import os
@@ -176,6 +178,8 @@ class PhoneDevice:
         self.primary = None
         self.input_frame = None
         self.geometry = None
+        self._ocr_cache = None
+        self._last_outputs = None
         self.native_text = os.environ.get('PHONE_USE_TEXT_HELPER') == '1'
 
     def _screen(self):
@@ -238,7 +242,19 @@ class PhoneDevice:
             raise PhoneError('Display or foreground changed during capture; observe again')
         return seq, timestamp, png
 
-    def observe(self, screenshot=False, elements=True, editor=False):
+    def _read_elements(self, screen, png):
+        # Reuse only the recognition result. The frame, editor binding and observation ID are fresh.
+        key = (screen, hashlib.sha256(png).digest())
+        if self._ocr_cache is not None and self._ocr_cache[0] == key:
+            return self._ocr_cache[1], None
+        self._ocr_cache = None
+        elements, warning = _ocr(png, screen.width, screen.height)
+        if warning is None:
+            self._ocr_cache = (key, elements)
+        return elements, warning
+
+    def observe(self, screenshot=False, elements=True, editor=False, since=None):
+        previous = self.observation if since is not None else None
         self.observation = None
         screen = self._screen()
         binding = None
@@ -255,19 +271,32 @@ class PhoneDevice:
             if time.monotonic() >= deadline:
                 raise PhoneError('Waiting for a frame after input; observe again')
             time.sleep(.1)
-        found, warning = _ocr(png, screen.width, screen.height) if elements else ([], None)
+        outputs = {name for name, wanted in (('image', screenshot), ('elements', elements), ('editor', editor)) if wanted}
+        editor_ready = binding is None or binding['status'] == 'ready'
+        unchanged = (since is not None and previous is not None and previous[0] == since
+                     and screen == previous[1] and png == previous[2] and editor_ready
+                     and self._last_outputs is not None and outputs <= self._last_outputs)
+        if unchanged:
+            found, warning = (previous[3] if elements else []), None
+        else:
+            found, warning = self._read_elements(screen, png) if elements else ([], None)
         observation_id = secrets.token_hex(12)
         self.observation = (observation_id, screen, png, found, binding)
+        self._last_outputs = outputs if editor_ready and warning is None else None
         result = {'observation_id': observation_id, 'display_id': screen.display,
                   'width': screen.width, 'height': screen.height, 'rotation': screen.rotation,
                   'activity': screen.activity,
-                  'source': 'ocr' if elements else 'frame', 'elements': found,
+                  'source': 'ocr' if elements else 'frame',
                   'frame_sequence': seq, 'captured_ms': timestamp}
+        if unchanged:
+            result['unchanged'] = True
+        else:
+            result['elements'] = deepcopy(found)
         if warning:
             result['warning'] = warning
         if binding is not None:
             result['editor'] = {k: v for k, v in binding.items() if k != 'token'}
-        if screenshot:
+        if screenshot and not unchanged:
             result['image_png'] = png
         return result
 
@@ -408,6 +437,8 @@ class PhoneDevice:
         raise TextInputError('unconfirmed', 'Text may have changed. Inspect the editor before retrying.')
 
     def close(self):
+        self._ocr_cache = None
+        self._last_outputs = None
         self.observation = None
         self.input_frame = None
         self.geometry = None

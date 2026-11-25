@@ -1,4 +1,5 @@
 include README.en.md
+include docs/setup.md docs/setup.en.md
 include examples/check.py
 include android-text-input/README.md android-text-input/AndroidManifest.xml android-text-input/build-apk.sh
 recursive-include android-text-input/src *.java

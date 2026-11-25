@@ -27,10 +27,11 @@ def tool(name, description, properties, required=()):
 
 TOOLS = {item["name"]: item for item in (
     tool("phone_status", "Check the configured Android secondary display.", {}),
-    tool("phone_observe", "Observe the secondary display. Set editor=true before typing to bind the focused native editor; disable elements to skip OCR.",
+    tool("phone_observe", "Observe the secondary display. Set editor=true before typing; disable elements to skip OCR. Pass the last observation ID as since to omit identical visual output. On unchanged=true, reuse its visual data with the new observation ID.",
          {"screenshot": {"type": "boolean", "default": False},
           "editor": {"type": "boolean", "default": False},
-          "elements": {"type": "boolean", "default": True}}),
+          "elements": {"type": "boolean", "default": True},
+          "since": {"type": "string", "minLength": 1, "description": "Previous observation ID from this client."}}),
     tool("phone_launch", "Open an Android app on the configured secondary display, then observe it.",
          {"package": {"type": "string", "minLength": 1}}, ["package"]),
     tool("phone_tap", "Tap a visible element by ID, or a point in the observed display's pixel coordinates.",

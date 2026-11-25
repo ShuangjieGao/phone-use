@@ -43,6 +43,70 @@ class PhoneDeviceTests(unittest.TestCase):
             self.phone.act('key', observation['observation_id'], key='back')
         self.call.assert_not_called()
 
+    def test_since_omits_delivered_visuals_but_refreshes_editor_and_action_token(self):
+        self.phone.native_text = True
+        inspect = self.start_patch('request_editor', side_effect=[
+            {'status': 'ready', 'transport': 'input_connection', 'token': token}
+            for token in ('old-native', 'fresh-native', 'third-native')])
+        first = self.phone.observe(editor=True, screenshot=True)
+        self.capture.return_value = (3, 1003, self.png)
+        second = self.phone.observe(editor=True, screenshot=True, since=first['observation_id'])
+        self.assertTrue(second['unchanged'])
+        self.assertNotIn('elements', second)
+        self.assertNotIn('image_png', second)
+        self.assertNotIn('token', second['editor'])
+        self.assertEqual(self.phone.observation[4]['token'], 'fresh-native')
+        self.assertEqual(second['frame_sequence'], 3)
+        third = self.phone.observe(editor=True, screenshot=True, since=second['observation_id'])
+        self.assertTrue(third['unchanged'])
+        self.assertEqual(len({v['observation_id'] for v in (first, second, third)}), 3)
+        self.assertEqual(inspect.call_count, 3)
+        self.assertEqual(self.capture.call_count, 3)
+        with self.assertRaisesRegex(device.PhoneError, 'expired'):
+            self.phone.act('tap', second['observation_id'], element='e1')
+        self.phone.act('tap', third['observation_id'], element=first['elements'][0]['id'])
+        self.call.assert_called_once_with('input', '-d', '8', 'tap', '10', '15')
+        self.capture.return_value = (4, 10**15, self.png)
+        after_input = self.phone.observe(since=third['observation_id'])
+        self.assertNotIn('unchanged', after_input)
+        self.assertIn('elements', after_input)
+
+    def test_since_returns_full_output_for_unknown_id_changed_screen_pixels_or_new_options(self):
+        plain = self.phone.observe()
+        extra = self.phone.observe(screenshot=True, since=plain['observation_id'])
+        self.assertNotIn('unchanged', extra)
+        self.assertEqual(extra['image_png'], self.png)
+        self.capture.return_value = (3, 1002, b'another frame')
+        changed = self.phone.observe(screenshot=True, since=extra['observation_id'])
+        self.assertNotIn('unchanged', changed)
+        self.assertEqual(changed['image_png'], b'another frame')
+        self.screen_call.return_value = replace(self.screen, activity='net.test/.Another')
+        switched = self.phone.observe(screenshot=True, since=changed['observation_id'])
+        self.assertNotIn('unchanged', switched)
+        unknown = self.phone.observe(screenshot=True, since='another-client-id')
+        self.assertNotIn('unchanged', unknown)
+        plain_again = self.phone.observe(screenshot=True)
+        self.assertNotIn('unchanged', plain_again)
+        self.assertIn('elements', plain_again)
+        self.assertIn('image_png', plain_again)
+
+    def test_since_does_not_reuse_failed_ocr_or_unavailable_editor(self):
+        self.phone.native_text = True
+        with patch.object(device, '_ocr', side_effect=[
+                ([], 'ocr unavailable'), ([{'id':'e1'}], None)]) as recognize:
+            failed = self.phone.observe()
+            recovered = self.phone.observe(since=failed['observation_id'])
+            self.assertEqual(recognize.call_count, 2)
+            self.assertNotIn('unchanged', recovered)
+            self.assertEqual(recovered['elements'], [{'id':'e1'}])
+        self.start_patch('request_editor', side_effect=[
+            {'status':'not_applied', 'reason':'password_field'},
+            {'status':'not_applied', 'reason':'password_field'}])
+        unavailable = self.phone.observe(editor=True)
+        second = self.phone.observe(editor=True, since=unavailable['observation_id'])
+        self.assertNotIn('unchanged', second)
+        self.assertEqual(second['editor']['reason'], 'password_field')
+
     def test_observed_taps_use_logical_landscape_axes_and_expire_on_rotation(self):
         landscape = replace(self.screen, width=240, height=120, rotation=1, configured_size=(120,240))
         self.screen_call.return_value = landscape
@@ -64,6 +128,45 @@ class PhoneDeviceTests(unittest.TestCase):
         self.assertEqual(view['source'], 'frame')
         self.assertEqual(view['elements'], [])
         self.assertEqual(view['image_png'], self.png)
+
+    def test_ocr_cache_uses_fresh_frame_and_does_not_share_mutable_elements(self):
+        def recognize(*args):
+            return [{'id':'e1','text':'Hello','bounds':[4,6,16,24]}], None
+        with patch.object(device, '_ocr', side_effect=recognize) as ocr:
+            first = self.phone.observe()
+            first['elements'][0]['bounds'][0] = 99
+            self.capture.return_value = (3, 1010, self.png)
+            second = self.phone.observe()
+            self.assertEqual(second['elements'][0]['bounds'][0], 4)
+            self.assertNotEqual(first['observation_id'], second['observation_id'])
+            self.assertEqual(second['frame_sequence'], 3)
+            self.assertEqual(self.capture.call_count, 2)
+            self.assertEqual(ocr.call_count, 1)
+            second['elements'][0]['text'] = 'changed by caller'
+            self.assertEqual(self.phone.observe()['elements'][0]['text'], 'Hello')
+            self.assertEqual(ocr.call_count, 1)
+            self.capture.return_value = (4, 1020, b'new screen pixels')
+            self.phone.observe()
+            self.screen_call.return_value = replace(self.screen, activity='other/.UI')
+            self.phone.observe()
+            self.phone.close()
+            self.phone.observe()
+            self.assertEqual(ocr.call_count, 4)
+
+    def test_ocr_failure_is_retried_and_a_successful_empty_result_can_be_reused(self):
+        with patch.object(device, '_ocr', side_effect=[([], 'unavailable'), ([], None)]) as ocr:
+            self.assertEqual(self.phone.observe()['warning'], 'unavailable')
+            self.assertNotIn('warning', self.phone.observe())
+            self.assertEqual(self.phone.observe()['elements'], [])
+            self.assertEqual(ocr.call_count, 2)
+
+    def test_caller_edits_cannot_change_coordinates_used_after_an_unchanged_observation(self):
+        first = self.phone.observe()
+        first['elements'][0]['bounds'][:] = [100, 50, 120, 70]
+        next_view = self.phone.observe(since=first['observation_id'])
+        self.assertTrue(next_view['unchanged'])
+        self.phone.act('tap', next_view['observation_id'], element='e1')
+        self.call.assert_called_once_with('input', '-d', '8', 'tap', '10', '15')
 
     def test_verified_unicode_uses_bound_editor_without_exposing_native_token(self):
         self.phone.native_text = True
